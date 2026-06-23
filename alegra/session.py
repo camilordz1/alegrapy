@@ -1,60 +1,276 @@
-from requests import request
-import logging
 import base64
-import json
+import logging
+from typing import Any, Dict, List, Optional, Union
+import requests
+
+# Create a dedicated logger for the library, allowing applications to configure it
+logger = logging.getLogger("alegra")
 
 
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s - %(levelname)s - %(message)s",
-                    filename="alegra.log",
-                    filemode="a")
+class AlegraAPIError(Exception):
+    """Exception raised for errors in the Alegra API response.
+
+    Attributes:
+        message (str): Explanation of the error.
+        status_code (int, optional): HTTP status code returned by the API.
+        response_body (str, optional): Raw response body text from the server.
+    """
+    def __init__(self, message: str, status_code: Optional[int] = None, response_body: Optional[str] = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_body = response_body
 
 
-class session():
+class AlegraClient:
+    """The main client interface for interacting with the Alegra API.
 
-    user = None
-    token = None
-    url = "https://api.alegra.com/api/v1/"
-    headers = {'Accept': 'application/json',
-               'Content-type': 'application/json'}
-
-    @classmethod
-    def create_auth(self) -> None:
-        """return authorization"""
-
-        api_key = base64.b64encode(
-            f"{self.user}:{self.token}".encode()).decode()
-        self.headers['Authorization'] = f"Basic {api_key}"
-
-    @classmethod
-    def query(self, method, url, data={}, params={}) -> dict:
-        """quey method
+    Allows managing multiple API sessions with different credentials.
+    """
+    def __init__(self, user: Optional[str] = None, token: Optional[str] = None, url: Optional[str] = None) -> None:
+        """Initialize the client.
 
         Args:
-            method (str): send query method (get,post,delete)
-            url (str): endpoint
-            data (dict, optional): query data. Defaults to {}.
-            params (dict, optional): query params. Defaults to {}.
+            user (str, optional): Alegra username (email).
+            token (str, optional): Alegra API token.
+            url (str, optional): Custom base API URL. Defaults to 'https://api.alegra.com/api/v1/'.
+        """
+        self._user = user
+        self._token = token
+        self._url = url
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        })
+
+    @property
+    def contacts(self) -> 'Contacts':
+        """Access Contacts resource operations."""
+        if not hasattr(self, '_contacts'):
+            from alegra.contacts import Contacts
+            self._contacts = Contacts(self)
+        return self._contacts
+
+    @property
+    def invoices(self) -> 'Invoices':
+        """Access Invoices resource operations."""
+        if not hasattr(self, '_invoices'):
+            from alegra.invoices import Invoices
+            self._invoices = Invoices(self)
+        return self._invoices
+
+    @property
+    def payments(self) -> 'Payments':
+        """Access Payments resource operations."""
+        if not hasattr(self, '_payments'):
+            from alegra.payments import Payments
+            self._payments = Payments(self)
+        return self._payments
+
+    @property
+    def items(self) -> 'Items':
+        """Access Items resource operations."""
+        if not hasattr(self, '_items'):
+            from alegra.items import Items
+            self._items = Items(self)
+        return self._items
+
+    @property
+    def estimates(self) -> 'Estimates':
+        """Access Estimates resource operations."""
+        if not hasattr(self, '_estimates'):
+            from alegra.estimates import Estimates
+            self._estimates = Estimates(self)
+        return self._estimates
+
+    @property
+    def purchase_orders(self) -> 'PurchaseOrders':
+        """Access Purchase Orders resource operations."""
+        if not hasattr(self, '_purchase_orders'):
+            from alegra.purchase_orders import PurchaseOrders
+            self._purchase_orders = PurchaseOrders(self)
+        return self._purchase_orders
+
+    @property
+    def bank_accounts(self) -> 'BankAccounts':
+        """Access Bank Accounts resource operations."""
+        if not hasattr(self, '_bank_accounts'):
+            from alegra.bank_accounts import BankAccounts
+            self._bank_accounts = BankAccounts(self)
+        return self._bank_accounts
+
+    @property
+    def taxes(self) -> 'Taxes':
+        """Access Taxes resource operations."""
+        if not hasattr(self, '_taxes'):
+            from alegra.taxes import Taxes
+            self._taxes = Taxes(self)
+        return self._taxes
+
+    @property
+    def currencies(self) -> 'Currencies':
+        """Access Currencies resource operations."""
+        if not hasattr(self, '_currencies'):
+            from alegra.currencies import Currencies
+            self._currencies = Currencies(self)
+        return self._currencies
+
+    @property
+    def retentions(self) -> 'Retentions':
+        """Access Retentions resource operations."""
+        if not hasattr(self, '_retentions'):
+            from alegra.retentions import Retentions
+            self._retentions = Retentions(self)
+        return self._retentions
+
+    @property
+    def users(self) -> 'Users':
+        """Access Users resource operations."""
+        if not hasattr(self, '_users'):
+            from alegra.users import Users
+            self._users = Users(self)
+        return self._users
+
+    @property
+    def user(self) -> Optional[str]:
+        """Get the authenticated username/email."""
+        return self._user if self._user is not None else session.user
+
+    @user.setter
+    def user(self, value: Optional[str]) -> None:
+        """Set the authenticated username/email."""
+        self._user = value
+
+    @property
+    def token(self) -> Optional[str]:
+        """Get the API token."""
+        return self._token if self._token is not None else session.token
+
+    @token.setter
+    def token(self, value: Optional[str]) -> None:
+        """Set the API token."""
+        self._token = value
+
+    @property
+    def url(self) -> str:
+        """Get the base API URL."""
+        if self._url is not None:
+            return self._url
+        return session.url or "https://api.alegra.com/api/v1/"
+
+    @url.setter
+    def url(self, value: Optional[str]) -> None:
+        """Set the base API URL."""
+        self._url = value
+
+    def get_auth_header(self) -> str:
+        """Generate the Basic Authorization header string from credentials.
 
         Returns:
-            (dict, None): if it's correct returns sever answer, for other hand
-            returns None
+            str: Basic authorization header, or empty string if credentials are missing.
         """
+        user = self.user
+        token = self.token
+        if not user or not token:
+            return ""
+        api_key = base64.b64encode(f"{user}:{token}".encode()).decode()
+        return f"Basic {api_key}"
 
-        self.create_auth()
+    def query(self, method: str, url: str, data: Optional[Dict[str, Any]] = None,
+              params: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Any]] = None) -> Any:
+        """Perform an HTTP request to the Alegra API and handle errors.
 
-        response = request(method,
-                           url,
-                           params=params,
-                           data=json.dumps(data),
-                           headers=self.headers)
+        Args:
+            method (str): HTTP method (get, post, put, delete)
+            url (str): Full endpoint URL
+            data (dict, optional): Request body payload. Defaults to None.
+            params (dict, optional): Query parameters. Defaults to None.
+            files (dict, optional): Files for multipart uploads. Defaults to None.
 
-        short_url = url.replace("alegra.com/api/v1", "...")
-        if response.status_code == 200:
+        Returns:
+            Any: Parsed JSON response from server (dict, list, or empty dict/value).
 
-            logging.info(f"{method} - {short_url} - Successful!")
-            return json.loads(response.text)
+        Raises:
+            AlegraAPIError: If the server returns a non-2xx status code or a request error occurs.
+        """
+        auth_header = self.get_auth_header()
+        if auth_header:
+            self.session.headers['Authorization'] = auth_header
+        else:
+            self.session.headers.pop('Authorization', None)
 
-        logging.warning(
-            f"{method} - {short_url} - {response.json()['message']}")
-        return None
+        headers = dict(self.session.headers)
+        if files:
+            # Let requests determine the Content-Type with boundary for multipart/form-data
+            headers.pop('Content-Type', None)
+
+        try:
+            response = self.session.request(
+                method=method,
+                url=url,
+                json=data,
+                params=params,
+                headers=headers,
+                files=files
+            )
+        except Exception as e:
+            logger.error(f"HTTP request failed: {e}")
+            raise AlegraAPIError(f"HTTP request failed: {e}")
+
+        # Standardize URL for logging
+        short_url = url.replace("https://api.alegra.com/api/v1", "")
+
+        if 200 <= response.status_code < 300:
+            logger.info(f"{method.upper()} - {short_url} - Successful! (Status: {response.status_code})")
+            if response.status_code == 204 or not response.text.strip():
+                return {}
+            try:
+                return response.json()
+            except ValueError:
+                return {"response_text": response.text}
+
+        # Handle errors
+        error_msg = f"API error (Status {response.status_code})"
+        try:
+            res_json = response.json()
+            if isinstance(res_json, dict) and 'message' in res_json:
+                error_msg = res_json['message']
+        except ValueError:
+            res_json = None
+            if response.text:
+                error_msg = response.text
+
+        logger.warning(f"{method.upper()} - {short_url} - {error_msg}")
+        raise AlegraAPIError(error_msg, status_code=response.status_code, response_body=response.text)
+
+
+class session:
+    """Legacy compatibility class representing global session configurations."""
+    user: Optional[str] = None
+    token: Optional[str] = None
+    url: str = "https://api.alegra.com/api/v1/"
+    headers: Dict[str, str] = {'Accept': 'application/json', 'Content-type': 'application/json'}
+
+    @classmethod
+    def create_auth(cls) -> None:
+        """Compatibility method to populate headers dictionary"""
+        if cls.user and cls.token:
+            api_key = base64.b64encode(f"{cls.user}:{cls.token}".encode()).decode()
+            cls.headers['Authorization'] = f"Basic {api_key}"
+
+    @classmethod
+    def query(cls, method: str, url: str, data: Optional[Dict[str, Any]] = None,
+              params: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Any]] = None) -> Any:
+        """Perform a query using the legacy global credentials.
+
+        Delegates to the global default_client.
+        """
+        cls.create_auth()
+        # Delegate to global default client
+        return default_client.query(method, url, data=data, params=params, files=files)
+
+
+# Instantiate the default global client for legacy import compatibility
+default_client = AlegraClient()
+
+

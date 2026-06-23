@@ -1,10 +1,10 @@
 from pathlib import Path
-from setuptools import setup
+from setuptools import setup, find_packages
 
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
-VERSION = '0.0.1'
+VERSION = '0.0.3'
 DESCRIPTION = 'Este paquete nos permite consumir el API de Alegra'
 PACKAGE_NAME = 'AlegraPy'
 AUTHOR = 'Camilo Andrés Rodríguez Higuera'
@@ -13,7 +13,7 @@ GITHUB_URL = 'https://github.com/andresroh/alegrapy_package'
 
 setup(
     name = PACKAGE_NAME,
-    packages = [DESCRIPTION],
+    packages = find_packages(),
     version = VERSION,
     license='MIT',
     description = DESCRIPTION,

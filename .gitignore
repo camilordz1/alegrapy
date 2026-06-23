@@ -156,3 +156,5 @@ cython_debug/
 alegra_api.pkl
 keys.py
 alegra.log
+config.ini
+*.env

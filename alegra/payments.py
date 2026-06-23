@@ -1,9 +1,45 @@
-from alegra.actions import actions
+from typing import Any, Optional, Union
+from alegra.actions import Actions
 
 
-class payments(actions):
+class Payments(Actions):
+    """Operations related to payments (pagos/ingresos) endpoint."""
+    endpoint: str = "payments"
 
-    endpoint = "payments"
+    def __init__(self, client: Optional['AlegraClient'] = None) -> None:
+        """Initialize the resource.
 
-    def __init__(self) -> None:
-        pass
+        Args:
+            client (AlegraClient, optional): The AlegraClient instance.
+        """
+        super().__init__(client)
+
+    def void(self, id: Union[int, str]) -> Any:
+        """Void / Annul a payment by ID.
+
+        Args:
+            id (int or str): Payment ID.
+
+        Returns:
+            Any: Parsed JSON response from the server.
+        """
+        endpoint = f"{self.client.url}{self.endpoint}/{id}/void"
+        return self.client.query('post', endpoint)
+
+    def open(self, id: Union[int, str]) -> Any:
+        """Open / Reopen a void payment by ID.
+
+        Args:
+            id (int or str): Payment ID.
+
+        Returns:
+            Any: Parsed JSON response from the server.
+        """
+        endpoint = f"{self.client.url}{self.endpoint}/{id}/open"
+        return self.client.query('post', endpoint)
+
+
+# For backward compatibility
+payments = Payments
+
+

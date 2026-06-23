@@ -1,9 +1,20 @@
-from alegra.actions import actions
+from typing import Optional
+from alegra.actions import Actions
 
 
-class contacts(actions):
+class Contacts(Actions):
+    """Operations related to contacts (clientes/proveedores) endpoint."""
+    endpoint: str = "contacts"
 
-    endpoint = "contacts"
+    def __init__(self, client: Optional['AlegraClient'] = None) -> None:
+        """Initialize the resource.
 
-    def __init__(self) -> None:
-        pass
+        Args:
+            client (AlegraClient, optional): The AlegraClient instance.
+        """
+        super().__init__(client)
+
+
+# For backward compatibility
+contacts = Contacts
+
