@@ -56,9 +56,9 @@ This is a library consumed by other applications; callers may pass end-user inpu
 | T2 | f818ae0 | RED: 21 ran, 1 failure + 18 errors (invalid ids reached the mocked request); GREEN: 21 tests OK | high; granted; approved + acknowledged (lineage review-f888d8c17b28c6f1); range 8fd5165..52c21d3 |
 | T2b | 2b1331f | RED: 23 ran, 1 error (`test_int_like_ids_are_accepted` against committed source); GREEN: 23 tests OK | high; granted; approved + acknowledged (lineage review-82b9d2aa52a06b2a) |
 | T3 | 0b398c7 | RED: 28 ran, 11 failures (insecure/malformed urls accepted by constructor, setter and legacy query); GREEN: 28 tests OK | high; granted; approved + acknowledged (lineage review-7523605932838e4e) |
-| T4 | (this commit: fix(session) pairwise) | RED: 36 ran, 3 failures (own user used with global token, own token with global user, Authorization stored on shared session headers); GREEN: 36 tests OK | pending assessment |
-| T5 | (this commit: fix(session) logs) | RED: 43 ran, 8 failures (API message/body and exception text logged, query string logged, userinfo accepted, URL echoed in errors, constructor bypassed url setter); GREEN: 43 tests OK | pending assessment |
-| T6 | (this commit: docs(readme)) | docs only; GREEN: 43 tests OK | pending assessment |
+| T4 | 32312f4 | RED: 36 ran, 3 failures (own user used with global token, own token with global user, Authorization stored on shared session headers); GREEN: 36 tests OK | high; granted; approved + acknowledged as one slice 0b398c7..5d5b583 (lineage review-c52fc725d50363d6) |
+| T5 | dbd3a85 | RED: 43 ran, 8 failures (API message/body and exception text logged, query string logged, userinfo accepted, URL echoed in errors, constructor bypassed url setter); GREEN: 43 tests OK | high; granted; approved + acknowledged as one slice 0b398c7..5d5b583 (lineage review-c52fc725d50363d6) |
+| T6 | 5d5b583 | docs only; GREEN: 43 tests OK | high; granted; approved + acknowledged as one slice 0b398c7..5d5b583 (lineage review-c52fc725d50363d6) |
 
 ### Follow-ups from T1 review (non-blocking)
 - R4 WARNING: a timeout on non-idempotent POSTs (invoices, payments) is ambiguous; the record may
@@ -87,7 +87,15 @@ This is a library consumed by other applications; callers may pass end-user inpu
   the `url` setter instead of duplicating its logic.
 - R3 SUGGESTION: loopback test should also send a request; ensure tests never leak a bad `session.url`.
 
-Reviewed boundary: `0b398c7`.
+### Follow-ups from T4-T6 review (non-blocking)
+- R1 SUGGESTION: `requests` merges `session.headers` back in `prepare_request`, so dropping `Authorization`
+  from the per-request dict does not remove a caller-set session-level `Authorization`; set it to `None`
+  in the per-request headers when there are no credentials.
+- R2/R3 SUGGESTION: `_log_path` strips the base with a bare `startswith` (no path-segment boundary).
+- R2/R3 SUGGESTION: `test_constructor_validates_through_url_setter` uses `unittest.mock.PropertyMock` via
+  attribute chain and tests implementation rather than behavior.
+
+Reviewed boundary: `5d5b583`.
 
 ## Next step
-Assess and review range 0b398c7..HEAD.
+All tasks done and reviewed. Push / PR are the user's decision. Optional: address non-blocking follow-ups.
