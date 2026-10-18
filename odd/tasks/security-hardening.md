@@ -42,7 +42,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 - [x] T3 — Enforce HTTPS base URL (route: delegated writer; trigger: preparation + tests)
 - [x] T4 — Pairwise credential resolution and per-request headers (route: delegated writer; trigger: preparation + tests)
 - [x] T5 — Stop logging response bodies / exception text (route: delegated writer; trigger: preparation + tests)
-- [ ] T6 — Document the new security behavior in README (route: inline or with T5)
+- [x] T6 — Document the new security behavior in README (route: inline or with T5)
 
 ## Acceptance criteria
 - Each task has a RED test observed before the fix, then GREEN.
@@ -58,6 +58,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 | T3 | 0b398c7 | RED: 28 ran, 11 failures (insecure/malformed urls accepted by constructor, setter and legacy query); GREEN: 28 tests OK | high; granted; approved + acknowledged (lineage review-7523605932838e4e) |
 | T4 | (this commit: fix(session) pairwise) | RED: 36 ran, 3 failures (own user used with global token, own token with global user, Authorization stored on shared session headers); GREEN: 36 tests OK | pending assessment |
 | T5 | (this commit: fix(session) logs) | RED: 43 ran, 8 failures (API message/body and exception text logged, query string logged, userinfo accepted, URL echoed in errors, constructor bypassed url setter); GREEN: 43 tests OK | pending assessment |
+| T6 | (this commit: docs(readme)) | docs only; GREEN: 43 tests OK | pending assessment |
 
 ### Follow-ups from T1 review (non-blocking)
 - R4 WARNING: a timeout on non-idempotent POSTs (invoices, payments) is ambiguous; the record may
@@ -89,4 +90,4 @@ This is a library consumed by other applications; callers may pass end-user inpu
 Reviewed boundary: `0b398c7`.
 
 ## Next step
-T4, T5, T6 in one writer (three commits), reviewed as one slice.
+Assess and review range 0b398c7..HEAD.

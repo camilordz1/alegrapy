@@ -115,6 +115,29 @@ invoice_list = invoice_helper.list(start=0, limit=5)
 
 ---
 
+## Seguridad
+
+- **HTTPS obligatorio**: la URL base debe usar `https://`. Solo se permite `http://` para `localhost`, `127.0.0.1` y `::1` (pruebas locales). Las URLs con credenciales incrustadas (`usuario:clave@host`) se rechazan con `ValueError`.
+- **Validación de IDs**: los IDs deben ser enteros no negativos (incluidos los enteros de numpy) o cadenas con letras, dígitos, `_` y `-`. Cualquier otro valor lanza `ValueError` antes de enviar la petición.
+- **Timeout**: cada petición tiene un timeout por defecto de 30 segundos. Se configura con `AlegraClient(timeout=...)` o, en modo heredado, con `session.timeout`.
+- **Cuidado con los reintentos en `POST`**: un timeout en una operación que crea registros (por ejemplo, una factura o un pago) es ambiguo, ya que el registro pudo haberse creado en Alegra aunque el cliente lance un error. No reintentes a ciegas; consulta primero si el registro existe.
+- **Credenciales por par**: un cliente nunca mezcla su `user` con el `token` global. Si el cliente define `user` o `token`, se usa solo su propio par (una mitad faltante implica que no se envía autenticación); las credenciales globales de `session` se usan solo cuando el cliente no define ninguna.
+- **Logs seguros**: los logs registran únicamente el método, la ruta (sin parámetros de consulta) y el código de estado. Nunca incluyen cuerpos de respuesta ni tokens. `AlegraAPIError` conserva `status_code` y `response_body` para que tu aplicación pueda inspeccionarlos.
+- **Manejo de credenciales**: guarda tu usuario y token en variables de entorno o en un archivo `.env`, y nunca los subas al repositorio.
+
+```python
+import os
+from alegra import AlegraClient
+
+client = AlegraClient(
+    user=os.environ["ALEGRA_USER"],
+    token=os.environ["ALEGRA_TOKEN"],
+    timeout=10,
+)
+```
+
+---
+
 ## Referencias Oficiales
 - **Documentación de la API de Alegra**: https://developer.alegra.com/
 
