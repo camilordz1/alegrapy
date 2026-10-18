@@ -37,7 +37,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 
 ## Tasks
 - [x] T1 — Default request timeout (route: delegated writer; trigger: preparation + tests)
-- [ ] T2 — Validate resource ids before building URLs (route: delegated writer; trigger: 2+ non-trivial files)
+- [x] T2 — Validate resource ids before building URLs (route: delegated writer; trigger: 2+ non-trivial files)
 - [ ] T3 — Enforce HTTPS base URL (route: delegated writer; trigger: preparation + tests)
 - [ ] T4 — Pairwise credential resolution and per-request headers (route: delegated writer; trigger: preparation + tests)
 - [ ] T5 — Stop logging response bodies / exception text (route: delegated writer; trigger: preparation + tests)
@@ -51,7 +51,16 @@ This is a library consumed by other applications; callers may pass end-user inpu
 ## Progress / evidence
 | Task | Commit | Tests | Review tier / outcome |
 |------|--------|-------|------------------------|
-| T1 | 41de750 | RED: 3 errors (no `timeout` kwarg/param); GREEN: 16 tests OK | pending assessment |
+| T1 | 8fd5165 | RED: 3 errors (no `timeout` kwarg/param); GREEN: 16 tests OK | high; granted; approved + acknowledged (lineage review-3bb45dcdd52fe328) |
+| T2 | HASH | RED: 21 ran, 1 failure + 18 errors (invalid ids reached the mocked request); GREEN: 21 tests OK | pending assessment |
+
+### Follow-ups from T1 review (non-blocking)
+- R4 WARNING: a timeout on non-idempotent POSTs (invoices, payments) is ambiguous; the record may
+  be created server-side while the client raises. Document "do not blindly retry POSTs" in README (T6).
+- R3/R2 suggestions: validate `timeout` (positive number), clarify that `timeout=None` means
+  "use global default", and test the `timeout` setter.
+
+Reviewed boundary: `8fd5165`.
 
 ## Next step
 T2.

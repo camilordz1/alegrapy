@@ -316,6 +316,75 @@ class TestAlegraPy(unittest.TestCase):
 
         self.assertIn("HTTP request failed", str(ctx.exception))
 
+    @patch('requests.Session.request')
+    def test_read_rejects_path_traversal_id(self, mock_request):
+        client = AlegraClient(user="user", token="token")
+
+        with self.assertRaises(ValueError):
+            client.contacts.read("1/../../users/self")
+
+        mock_request.assert_not_called()
+
+    @patch('requests.Session.request')
+    def test_sub_actions_reject_traversal_id(self, mock_request):
+        client = AlegraClient(user="user", token="token")
+
+        with self.assertRaises(ValueError):
+            client.invoices.void("1/../../users/self")
+        with self.assertRaises(ValueError):
+            client.estimates.void("1/../../users/self")
+        with self.assertRaises(ValueError):
+            client.payments.open("../x")
+        with self.assertRaises(ValueError):
+            client.purchase_orders.add_comment("1/x", "hi")
+        with self.assertRaises(ValueError):
+            client.invoices.send_email("1/x", "a@example.com")
+
+        mock_request.assert_not_called()
+
+    @patch('requests.Session.request')
+    def test_update_delete_attachment_reject_invalid_id(self, mock_request):
+        client = AlegraClient(user="user", token="token")
+
+        with self.assertRaises(ValueError):
+            client.items.update("1/x", {"name": "n"})
+        with self.assertRaises(ValueError):
+            client.items.delete("1/x")
+        with self.assertRaises(ValueError):
+            client.items.add_attachment("1/x", "dummy.txt")
+
+        mock_request.assert_not_called()
+
+    @patch('requests.Session.request')
+    def test_invalid_id_values_are_rejected(self, mock_request):
+        client = AlegraClient(user="user", token="token")
+        bad_ids = [
+            "1?x=y", "1#frag", "1%2F", "1.5", "a b", "..", "", " ",
+            True, False, -1, 1.5, None, [1], "1\n",
+        ]
+        for bad in bad_ids:
+            with self.subTest(id=bad):
+                with self.assertRaises(ValueError):
+                    client.contacts.read(bad)
+
+        mock_request.assert_not_called()
+
+    @patch('requests.Session.request')
+    def test_valid_ids_are_accepted(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        client = AlegraClient(user="user", token="token")
+
+        client.contacts.read(0)
+        client.contacts.read(123)
+        client.contacts.read("123")
+        client.contacts.read("abc_DEF-9")
+
+        urls = [c.args[1] if len(c.args) > 1 else c.kwargs['url']
+                for c in mock_request.call_args_list]
+        self.assertEqual(len(urls), 4)
+        self.assertTrue(urls[1].endswith('/contacts/123'))
+        self.assertTrue(urls[3].endswith('/contacts/abc_DEF-9'))
+
     @patch('os.path.exists')
     @patch('builtins.open', create=True)
     @patch('requests.Session.request')

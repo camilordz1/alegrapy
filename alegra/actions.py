@@ -1,4 +1,30 @@
+import re
 from typing import Any, Dict, List, Optional, Union
+
+_ID_PATTERN = re.compile(r'[A-Za-z0-9_-]+')
+
+
+def validate_id(id: Union[int, str]) -> Union[int, str]:
+    """Validate a resource ID before it is placed in a URL path.
+
+    Args:
+        id (int or str): A non-negative int, or a string of letters, digits, '_' or '-'.
+
+    Returns:
+        int or str: The same ID, unchanged.
+
+    Raises:
+        ValueError: If the ID could alter the URL path or query (e.g. contains '/', '.', '?').
+    """
+    if isinstance(id, int) and not isinstance(id, bool) and id >= 0:
+        return id
+    if isinstance(id, str) and _ID_PATTERN.fullmatch(id):
+        return id
+    raise ValueError(
+        f"Invalid resource id {id!r}: expected a non-negative integer or a string "
+        "containing only letters, digits, '_' and '-'."
+    )
+
 
 class Actions:
     """Base class for all resource endpoints in the Alegra API.
@@ -37,8 +63,11 @@ class Actions:
 
         Returns:
             Any: The parsed JSON response representing the resource.
+
+        Raises:
+            ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{id}"
+        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}"
         return self.client.query('get', endpoint, params=kwargs)
 
     def list(self, start: int = 0, limit: int = 30, **kwargs: Any) -> List[Any]:
@@ -85,8 +114,11 @@ class Actions:
 
         Returns:
             Any: The parsed JSON response from the server.
+
+        Raises:
+            ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{id}"
+        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}"
         return self.client.query('put', endpoint, data=params, params=kwargs)
 
     def delete(self, id: Union[int, str], **kwargs: Any) -> Any:
@@ -98,8 +130,11 @@ class Actions:
 
         Returns:
             Any: The parsed JSON response from the server.
+
+        Raises:
+            ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{id}"
+        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}"
         return self.client.query('delete', endpoint, params=kwargs)
 
     def _upload_file(self, endpoint: str, file_path: str, field_name: str = 'file') -> Any:
@@ -133,8 +168,11 @@ class Actions:
 
         Returns:
             Any: The parsed JSON response from the server.
+
+        Raises:
+            ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{id}/attachment"
+        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}/attachment"
         return self._upload_file(endpoint, file_path, field_name)
 
 
