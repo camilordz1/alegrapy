@@ -39,7 +39,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 - [x] T1 — Default request timeout (route: delegated writer; trigger: preparation + tests)
 - [x] T2 — Validate resource ids before building URLs (route: delegated writer; trigger: 2+ non-trivial files)
 - [x] T2b — Accept `numbers.Integral` ids and centralize URL building (reopened from T2 review: R3/R4 WARNING int-like regression, R2 WARNING duplicated builder; route: delegated writer with T3)
-- [ ] T3 — Enforce HTTPS base URL (route: delegated writer; trigger: preparation + tests)
+- [x] T3 — Enforce HTTPS base URL (route: delegated writer; trigger: preparation + tests)
 - [ ] T4 — Pairwise credential resolution and per-request headers (route: delegated writer; trigger: preparation + tests)
 - [ ] T5 — Stop logging response bodies / exception text (route: delegated writer; trigger: preparation + tests)
 - [ ] T6 — Document the new security behavior in README (route: inline or with T5)
@@ -54,7 +54,8 @@ This is a library consumed by other applications; callers may pass end-user inpu
 |------|--------|-------|------------------------|
 | T1 | 8fd5165 | RED: 3 errors (no `timeout` kwarg/param); GREEN: 16 tests OK | high; granted; approved + acknowledged (lineage review-3bb45dcdd52fe328) |
 | T2 | f818ae0 | RED: 21 ran, 1 failure + 18 errors (invalid ids reached the mocked request); GREEN: 21 tests OK | high; granted; approved + acknowledged (lineage review-f888d8c17b28c6f1); range 8fd5165..52c21d3 |
-| T2b | (this commit: refactor(actions)) | RED: 23 ran, 1 error (`test_int_like_ids_are_accepted` against committed source); GREEN: 23 tests OK | pending assessment |
+| T2b | 2b1331f | RED: 23 ran, 1 error (`test_int_like_ids_are_accepted` against committed source); GREEN: 23 tests OK | high; granted; approved + acknowledged (lineage review-82b9d2aa52a06b2a) |
+| T3 | (this commit: fix(session)) | RED: 28 ran, 11 failures (insecure/malformed urls accepted by constructor, setter and legacy query); GREEN: 28 tests OK | pending assessment |
 
 ### Follow-ups from T1 review (non-blocking)
 - R4 WARNING: a timeout on non-idempotent POSTs (invoices, payments) is ambiguous; the record may
@@ -73,7 +74,10 @@ This is a library consumed by other applications; callers may pass end-user inpu
 - Parent finished T2b inline: split `_collection_url()` (list/create) from `_resource_url(id, *suffix)`
   (always validates), so `read(None)` is still rejected instead of hitting the collection URL.
 
-Reviewed boundary: `52c21d3`.
+### Follow-ups from T2b review (non-blocking)
+- R2/R3 SUGGESTION: `_IntLike` is registered on `numbers.Integral` at import (process-wide); consider a real `numbers.Integral` subclass.
+
+Reviewed boundary: `2b1331f`.
 
 ## Next step
-Assess T2b, then T3.
+T4.

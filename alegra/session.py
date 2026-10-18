@@ -1,10 +1,40 @@
 import base64
 import logging
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlsplit
 import requests
 
 # Create a dedicated logger for the library, allowing applications to configure it
 logger = logging.getLogger("alegra")
+
+# Hosts allowed to use plain HTTP, for local testing only
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _validate_base_url(url: str) -> str:
+    """Ensure the base API URL cannot expose credentials in transit.
+
+    Args:
+        url (str): Base API URL to validate.
+
+    Returns:
+        str: The same URL, unchanged, when valid.
+
+    Raises:
+        ValueError: If the scheme is not https (http is allowed only for loopback hosts)
+            or the URL has no host.
+    """
+    parts = urlsplit(url)
+    host = parts.hostname
+    if not host:
+        raise ValueError(f"Invalid base URL (missing host): {url!r}")
+    if parts.scheme == "https":
+        return url
+    if parts.scheme == "http" and host in _LOOPBACK_HOSTS:
+        return url
+    raise ValueError(
+        f"Insecure base URL {url!r}: https is required (http is allowed only for localhost, 127.0.0.1 or ::1)"
+    )
 
 
 class AlegraAPIError(Exception):
@@ -33,12 +63,16 @@ class AlegraClient:
         Args:
             user (str, optional): Alegra username (email).
             token (str, optional): Alegra API token.
-            url (str, optional): Custom base API URL. Defaults to 'https://api.alegra.com/api/v1/'.
+            url (str, optional): Custom base API URL. Must use https (http only for loopback hosts).
+                Defaults to 'https://api.alegra.com/api/v1/'.
             timeout (float, optional): Request timeout in seconds. Defaults to the global session timeout (30).
+
+        Raises:
+            ValueError: If url is given and is not a valid https (or loopback http) URL.
         """
         self._user = user
         self._token = token
-        self._url = url
+        self._url = _validate_base_url(url) if url is not None else None
         self._timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({
@@ -163,8 +197,15 @@ class AlegraClient:
 
     @url.setter
     def url(self, value: Optional[str]) -> None:
-        """Set the base API URL."""
-        self._url = value
+        """Set the base API URL.
+
+        Args:
+            value (str, optional): Base API URL, or None to use the global default.
+
+        Raises:
+            ValueError: If value is not None and is not a valid https (or loopback http) URL.
+        """
+        self._url = _validate_base_url(value) if value is not None else None
 
     @property
     def timeout(self) -> float:
@@ -205,7 +246,11 @@ class AlegraClient:
 
         Raises:
             AlegraAPIError: If the server returns a non-2xx status code or a request error occurs.
+            ValueError: If the resolved base URL is not https (or loopback http); nothing is sent.
         """
+        # Also covers the legacy global session.url, which is a plain class attribute
+        _validate_base_url(self.url)
+
         auth_header = self.get_auth_header()
         if auth_header:
             self.session.headers['Authorization'] = auth_header

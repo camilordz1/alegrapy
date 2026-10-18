@@ -431,6 +431,66 @@ class TestAlegraPy(unittest.TestCase):
 
         mock_request.assert_not_called()
 
+    @patch('requests.Session.request')
+    def test_constructor_rejects_insecure_or_malformed_urls(self, mock_request):
+        bad_urls = [
+            "http://evil.example.com/",
+            "ftp://x.example.com/",
+            "https:///nohost",
+            "//api.alegra.com/api/v1/",
+            "api.alegra.com/api/v1/",
+            "",
+        ]
+        for bad in bad_urls:
+            with self.subTest(url=bad):
+                with self.assertRaises(ValueError):
+                    AlegraClient(user="user", token="token", url=bad)
+
+        mock_request.assert_not_called()
+
+    @patch('requests.Session.request')
+    def test_url_setter_rejects_insecure_or_malformed_urls(self, mock_request):
+        client = AlegraClient(user="user", token="token")
+
+        for bad in ["http://evil.example.com/", "ftp://x.example.com/", "https:///nohost"]:
+            with self.subTest(url=bad):
+                with self.assertRaises(ValueError):
+                    client.url = bad
+
+        self.assertEqual(client.url, "https://api.alegra.com/api/v1/")
+        mock_request.assert_not_called()
+
+    @patch('requests.Session.request')
+    def test_custom_https_url_is_accepted_and_used(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        client = AlegraClient(user="user", token="token", url="https://custom.example.com/api/v1/")
+        client.contacts.read(1)
+
+        args, kwargs = mock_request.call_args
+        url = kwargs.get('url') or args[1]
+        self.assertEqual(url, "https://custom.example.com/api/v1/contacts/1")
+
+    @patch('requests.Session.request')
+    def test_loopback_http_urls_are_accepted(self, mock_request):
+        for good in ["http://localhost:8000/api/v1/", "http://127.0.0.1/", "http://[::1]:8000/"]:
+            with self.subTest(url=good):
+                client = AlegraClient(user="user", token="token", url=good)
+                self.assertEqual(client.url, good)
+                client.url = good
+
+    @patch('requests.Session.request')
+    def test_legacy_insecure_session_url_is_rejected_before_sending(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        session.user = "test_user@example.com"
+        session.token = "test_token_123"
+        session.url = "http://evil.example.com/"
+
+        with self.assertRaises(ValueError):
+            contacts().read(1)
+
+        mock_request.assert_not_called()
+
     @patch('os.path.exists')
     @patch('builtins.open', create=True)
     @patch('requests.Session.request')
