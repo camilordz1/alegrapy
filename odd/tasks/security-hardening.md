@@ -41,7 +41,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 - [x] T2b — Accept `numbers.Integral` ids and centralize URL building (reopened from T2 review: R3/R4 WARNING int-like regression, R2 WARNING duplicated builder; route: delegated writer with T3)
 - [x] T3 — Enforce HTTPS base URL (route: delegated writer; trigger: preparation + tests)
 - [x] T4 — Pairwise credential resolution and per-request headers (route: delegated writer; trigger: preparation + tests)
-- [ ] T5 — Stop logging response bodies / exception text (route: delegated writer; trigger: preparation + tests)
+- [x] T5 — Stop logging response bodies / exception text (route: delegated writer; trigger: preparation + tests)
 - [ ] T6 — Document the new security behavior in README (route: inline or with T5)
 
 ## Acceptance criteria
@@ -57,6 +57,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 | T2b | 2b1331f | RED: 23 ran, 1 error (`test_int_like_ids_are_accepted` against committed source); GREEN: 23 tests OK | high; granted; approved + acknowledged (lineage review-82b9d2aa52a06b2a) |
 | T3 | 0b398c7 | RED: 28 ran, 11 failures (insecure/malformed urls accepted by constructor, setter and legacy query); GREEN: 28 tests OK | high; granted; approved + acknowledged (lineage review-7523605932838e4e) |
 | T4 | (this commit: fix(session) pairwise) | RED: 36 ran, 3 failures (own user used with global token, own token with global user, Authorization stored on shared session headers); GREEN: 36 tests OK | pending assessment |
+| T5 | (this commit: fix(session) logs) | RED: 43 ran, 8 failures (API message/body and exception text logged, query string logged, userinfo accepted, URL echoed in errors, constructor bypassed url setter); GREEN: 43 tests OK | pending assessment |
 
 ### Follow-ups from T1 review (non-blocking)
 - R4 WARNING: a timeout on non-idempotent POSTs (invoices, payments) is ambiguous; the record may

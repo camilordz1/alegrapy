@@ -21,19 +21,23 @@ def _validate_base_url(url: str) -> str:
         str: The same URL, unchanged, when valid.
 
     Raises:
-        ValueError: If the scheme is not https (http is allowed only for loopback hosts)
-            or the URL has no host.
+        ValueError: If the scheme is not https (http is allowed only for loopback hosts),
+            the URL has no host, or it embeds credentials (userinfo). Error messages never
+            include the raw URL, since it may carry secrets.
     """
     parts = urlsplit(url)
     host = parts.hostname
     if not host:
-        raise ValueError(f"Invalid base URL (missing host): {url!r}")
+        raise ValueError("Invalid base URL: missing host")
+    if "@" in parts.netloc:
+        raise ValueError("Invalid base URL: credentials in the URL are not allowed")
     if parts.scheme == "https":
         return url
     if parts.scheme == "http" and host in _LOOPBACK_HOSTS:
         return url
     raise ValueError(
-        f"Insecure base URL {url!r}: https is required (http is allowed only for localhost, 127.0.0.1 or ::1)"
+        f"Insecure base URL (scheme {parts.scheme!r}, host {host!r}): https is required "
+        f"(http is allowed only for {', '.join(sorted(_LOOPBACK_HOSTS))})"
     )
 
 
@@ -72,7 +76,8 @@ class AlegraClient:
         """
         self._user = user
         self._token = token
-        self._url = _validate_base_url(url) if url is not None else None
+        self._url = None
+        self.url = url  # validated by the setter
         self._timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({
@@ -243,6 +248,23 @@ class AlegraClient:
         api_key = base64.b64encode(f"{user}:{token}".encode()).decode()
         return f"Basic {api_key}"
 
+    def _log_path(self, url: str) -> str:
+        """Reduce a request URL to its path relative to the base URL, for logging.
+
+        The host, query string and fragment are dropped because they may carry sensitive data.
+
+        Args:
+            url (str): Full endpoint URL.
+
+        Returns:
+            str: Path without the base path or query string.
+        """
+        path = urlsplit(url).path
+        base_path = urlsplit(self.url).path.rstrip("/")
+        if base_path and path.startswith(base_path):
+            path = path[len(base_path):]
+        return path
+
     def query(self, method: str, url: str, data: Optional[Dict[str, Any]] = None,
               params: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Any]] = None) -> Any:
         """Perform an HTTP request to the Alegra API and handle errors.
@@ -258,7 +280,8 @@ class AlegraClient:
             Any: Parsed JSON response from server (dict, list, or empty dict/value).
 
         Raises:
-            AlegraAPIError: If the server returns a non-2xx status code or a request error occurs.
+            AlegraAPIError: If the server returns a non-2xx status code or a request error occurs
+                (transport errors chain the original exception as ``__cause__``).
             ValueError: If the resolved base URL is not https (or loopback http); nothing is sent.
         """
         # Also covers the legacy global session.url, which is a plain class attribute
@@ -285,11 +308,11 @@ class AlegraClient:
                 timeout=self.timeout
             )
         except Exception as e:
-            logger.error(f"HTTP request failed: {e}")
-            raise AlegraAPIError(f"HTTP request failed: {e}")
+            # Exception text may include the URL and query params, so log only the class name
+            logger.error(f"{method.upper()} - {self._log_path(url)} - request failed ({type(e).__name__})")
+            raise AlegraAPIError(f"HTTP request failed ({type(e).__name__})") from e
 
-        # Standardize URL for logging
-        short_url = url.replace("https://api.alegra.com/api/v1", "")
+        short_url = self._log_path(url)
 
         if 200 <= response.status_code < 300:
             logger.info(f"{method.upper()} - {short_url} - Successful! (Status: {response.status_code})")
@@ -311,7 +334,8 @@ class AlegraClient:
             if response.text:
                 error_msg = response.text
 
-        logger.warning(f"{method.upper()} - {short_url} - {error_msg}")
+        # The API message may contain user data: it stays in the exception, never in the logs
+        logger.warning(f"{method.upper()} - {short_url} - Failed! (Status: {response.status_code})")
         raise AlegraAPIError(error_msg, status_code=response.status_code, response_body=response.text)
 
 

@@ -591,6 +591,99 @@ class TestAlegraPy(unittest.TestCase):
         self.assertNotIn('Content-Type', mock_request.call_args.kwargs['headers'])
         self.assertEqual(client.session.headers['Content-Type'], 'application/json')
 
+    @patch('requests.Session.request')
+    def test_error_response_body_is_not_logged(self, mock_request):
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.text = '{"message": "SECRET-BODY-123"}'
+        mock_response.json.return_value = {"message": "SECRET-BODY-123"}
+        mock_request.return_value = mock_response
+
+        client = AlegraClient(user="user", token="token")
+        with self.assertLogs("alegra", level="INFO") as logs:
+            with self.assertRaises(AlegraAPIError) as ctx:
+                client.contacts.read(1)
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("SECRET-BODY-123", ctx.exception.response_body)
+        self.assertIn("SECRET-BODY-123", str(ctx.exception))
+        for message in logs.output:
+            self.assertNotIn("SECRET-BODY-123", message)
+        self.assertTrue(any("400" in m for m in logs.output))
+
+    @patch('requests.Session.request')
+    def test_non_json_error_body_is_not_logged(self, mock_request):
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "SECRET-BODY-123 internal trace"
+        mock_response.json.side_effect = ValueError("no json")
+        mock_request.return_value = mock_response
+
+        client = AlegraClient(user="user", token="token")
+        with self.assertLogs("alegra", level="INFO") as logs:
+            with self.assertRaises(AlegraAPIError):
+                client.contacts.read(1)
+
+        for message in logs.output:
+            self.assertNotIn("SECRET-BODY-123", message)
+
+    @patch('requests.Session.request')
+    def test_transport_error_text_is_not_logged_or_embedded(self, mock_request):
+        original = requests.exceptions.ConnectionError(
+            "Max retries exceeded with url: https://api.alegra.com/api/v1/contacts?email=pii@example.com"
+        )
+        mock_request.side_effect = original
+
+        client = AlegraClient(user="user", token="token")
+        with self.assertLogs("alegra", level="INFO") as logs:
+            with self.assertRaises(AlegraAPIError) as ctx:
+                client.contacts.list(email="pii@example.com")
+
+        for message in logs.output:
+            self.assertNotIn("pii@example.com", message)
+        self.assertIn("ConnectionError", "".join(logs.output))
+        self.assertNotIn("pii@example.com", str(ctx.exception))
+        self.assertIs(ctx.exception.__cause__, original)
+
+    @patch('requests.Session.request')
+    def test_success_log_has_no_query_string(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        client = AlegraClient(user="user", token="token")
+        with self.assertLogs("alegra", level="INFO") as logs:
+            client.query("get", "https://api.alegra.com/api/v1/contacts?email=pii@example.com",
+                         params={"query": "pii@example.com"})
+
+        output = "".join(logs.output)
+        self.assertNotIn("pii@example.com", output)
+        self.assertNotIn("?", output)
+        self.assertIn("/contacts", output)
+        self.assertIn("200", output)
+
+    def test_base_url_with_userinfo_is_rejected_without_echo(self):
+        for bad in ["https://user:pw@api.alegra.com/api/v1/", "https://user@api.alegra.com/api/v1/"]:
+            with self.subTest(url=bad):
+                with self.assertRaises(ValueError) as ctx:
+                    AlegraClient(user="user", token="token", url=bad)
+                self.assertNotIn("pw", str(ctx.exception))
+                self.assertNotIn(bad, str(ctx.exception))
+
+    def test_base_url_errors_do_not_echo_the_url(self):
+        bad = "http://evil.example.com/secret-path"
+        with self.assertRaises(ValueError) as ctx:
+            AlegraClient(user="user", token="token", url=bad)
+
+        message = str(ctx.exception)
+        self.assertNotIn(bad, message)
+        self.assertNotIn("secret-path", message)
+        for host in ("localhost", "127.0.0.1", "::1"):
+            self.assertIn(host, message)
+
+    def test_constructor_validates_through_url_setter(self):
+        with patch.object(AlegraClient, "url", new_callable=unittest.mock.PropertyMock) as prop:
+            AlegraClient(user="user", token="token", url="https://custom.example.com/")
+        prop.assert_called_with("https://custom.example.com/")
+
     @patch('os.path.exists')
     @patch('builtins.open', create=True)
     @patch('requests.Session.request')
