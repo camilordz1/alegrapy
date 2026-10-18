@@ -30,6 +30,8 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - toc:
       permalink: true
 
@@ -57,3 +59,4 @@ nav:
       - Migración desde el modo legacy: guias/migracion-legacy.md
   - Referencia de la API:
       - Introducción: referencia/index.md
+      - Actions: referencia/actions.md
