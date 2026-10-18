@@ -491,6 +491,106 @@ class TestAlegraPy(unittest.TestCase):
 
         mock_request.assert_not_called()
 
+    @staticmethod
+    def _basic(user, token):
+        return "Basic " + base64.b64encode(f"{user}:{token}".encode()).decode()
+
+    @patch('requests.Session.request')
+    def test_client_with_only_user_does_not_use_global_token(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        session.user = "global_user"
+        session.token = "global_token"
+
+        client = AlegraClient(user="own_user")
+        client.contacts.read(1)
+
+        headers = mock_request.call_args.kwargs['headers']
+        self.assertNotIn('Authorization', headers)
+        self.assertEqual(client.get_auth_header(), "")
+
+    @patch('requests.Session.request')
+    def test_client_with_only_token_does_not_use_global_user(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        session.user = "global_user"
+        session.token = "global_token"
+
+        client = AlegraClient(token="own_token")
+        client.contacts.read(1)
+
+        self.assertNotIn('Authorization', mock_request.call_args.kwargs['headers'])
+
+    @patch('requests.Session.request')
+    def test_client_without_credentials_uses_global_pair(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        session.user = "global_user"
+        session.token = "global_token"
+
+        client = AlegraClient()
+        client.contacts.read(1)
+
+        headers = mock_request.call_args.kwargs['headers']
+        self.assertEqual(headers['Authorization'], self._basic("global_user", "global_token"))
+
+    @patch('requests.Session.request')
+    def test_client_with_both_credentials_uses_own_pair(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        session.user = "global_user"
+        session.token = "global_token"
+
+        client = AlegraClient(user="own_user", token="own_token")
+        client.contacts.read(1)
+
+        headers = mock_request.call_args.kwargs['headers']
+        self.assertEqual(headers['Authorization'], self._basic("own_user", "own_token"))
+
+    @patch('requests.Session.request')
+    def test_query_does_not_store_authorization_on_shared_session(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        client = AlegraClient(user="own_user", token="own_token")
+        client.contacts.read(1)
+
+        self.assertNotIn('Authorization', client.session.headers)
+        self.assertIn('Authorization', mock_request.call_args.kwargs['headers'])
+
+    @patch('requests.Session.request')
+    def test_stale_session_authorization_does_not_leak_without_credentials(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        client = AlegraClient()
+        client.session.headers['Authorization'] = "Basic c3RhbGU6c3RhbGU="
+        client.contacts.read(1)
+
+        self.assertNotIn('Authorization', mock_request.call_args.kwargs['headers'])
+
+    @patch('requests.Session.request')
+    def test_two_clients_send_their_own_headers(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        first = AlegraClient(user="user_a", token="token_a")
+        second = AlegraClient(user="user_b", token="token_b")
+        first.contacts.read(1)
+        second.contacts.read(1)
+        first.contacts.read(2)
+
+        auth = [c.kwargs['headers']['Authorization'] for c in mock_request.call_args_list]
+        self.assertEqual(auth, [
+            self._basic("user_a", "token_a"),
+            self._basic("user_b", "token_b"),
+            self._basic("user_a", "token_a"),
+        ])
+
+    @patch('requests.Session.request')
+    def test_multipart_request_drops_content_type_per_request(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        client = AlegraClient(user="user", token="token")
+        client.query("post", "https://api.alegra.com/api/v1/contacts/1/attachment",
+                     files={"file": ("a.txt", b"x")})
+
+        self.assertNotIn('Content-Type', mock_request.call_args.kwargs['headers'])
+        self.assertEqual(client.session.headers['Content-Type'], 'application/json')
+
     @patch('os.path.exists')
     @patch('builtins.open', create=True)
     @patch('requests.Session.request')

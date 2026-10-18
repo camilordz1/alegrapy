@@ -1,6 +1,6 @@
 import base64
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlsplit
 import requests
 
@@ -168,10 +168,24 @@ class AlegraClient:
             self._users = Users(self)
         return self._users
 
+    def _credentials(self) -> Tuple[Optional[str], Optional[str]]:
+        """Resolve the (user, token) pair used to authenticate requests.
+
+        Credentials are resolved as a pair: if the client has its own user or its own token,
+        only the client's pair is used (a missing half is never filled from the global session).
+        The global ``session`` credentials are used only when the client has neither.
+
+        Returns:
+            Tuple[Optional[str], Optional[str]]: The effective (user, token) pair.
+        """
+        if self._user is not None or self._token is not None:
+            return self._user, self._token
+        return session.user, session.token
+
     @property
     def user(self) -> Optional[str]:
-        """Get the authenticated username/email."""
-        return self._user if self._user is not None else session.user
+        """Get the effective username/email (the client's own pair, else the global session's)."""
+        return self._credentials()[0]
 
     @user.setter
     def user(self, value: Optional[str]) -> None:
@@ -180,8 +194,8 @@ class AlegraClient:
 
     @property
     def token(self) -> Optional[str]:
-        """Get the API token."""
-        return self._token if self._token is not None else session.token
+        """Get the effective API token (the client's own pair, else the global session's)."""
+        return self._credentials()[1]
 
     @token.setter
     def token(self, value: Optional[str]) -> None:
@@ -223,8 +237,7 @@ class AlegraClient:
         Returns:
             str: Basic authorization header, or empty string if credentials are missing.
         """
-        user = self.user
-        token = self.token
+        user, token = self._credentials()
         if not user or not token:
             return ""
         api_key = base64.b64encode(f"{user}:{token}".encode()).decode()
@@ -251,13 +264,12 @@ class AlegraClient:
         # Also covers the legacy global session.url, which is a plain class attribute
         _validate_base_url(self.url)
 
+        # Build headers per request: the shared requests.Session must never carry credentials,
+        # otherwise concurrent requests with different credentials could mix them up
+        headers = {k: v for k, v in self.session.headers.items() if k.lower() != 'authorization'}
         auth_header = self.get_auth_header()
         if auth_header:
-            self.session.headers['Authorization'] = auth_header
-        else:
-            self.session.headers.pop('Authorization', None)
-
-        headers = dict(self.session.headers)
+            headers['Authorization'] = auth_header
         if files:
             # Let requests determine the Content-Type with boundary for multipart/form-data
             headers.pop('Content-Type', None)
