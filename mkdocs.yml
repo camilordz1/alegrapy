@@ -59,4 +59,16 @@ nav:
       - Migración desde el modo legacy: guias/migracion-legacy.md
   - Referencia de la API:
       - Introducción: referencia/index.md
+      - Cliente y errores: referencia/session.md
       - Actions: referencia/actions.md
+      - Facturas: referencia/invoices.md
+      - Contactos: referencia/contacts.md
+      - Pagos: referencia/payments.md
+      - Ítems: referencia/items.md
+      - Cotizaciones: referencia/estimates.md
+      - Órdenes de compra: referencia/purchase_orders.md
+      - Cuentas bancarias: referencia/bank_accounts.md
+      - Impuestos: referencia/taxes.md
+      - Monedas: referencia/currencies.md
+      - Retenciones: referencia/retentions.md
+      - Usuarios: referencia/users.md

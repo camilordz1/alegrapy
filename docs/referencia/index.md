@@ -1,3 +1,21 @@
 # Referencia de la API
 
-Próximamente.
+Esta sección se genera automáticamente a partir de los docstrings del código fuente con [mkdocstrings](https://mkdocstrings.github.io/). Los docstrings están escritos en inglés, por lo que el contenido generado aparece en ese idioma; las guías en español explican el uso práctico.
+
+| Página | Contenido |
+|---|---|
+| [Cliente y errores](session.md) | `AlegraClient`, `AlegraAPIError` y la clase legacy `session` |
+| [Actions](actions.md) | Clase base `Actions` (operaciones estándar) y `validate_id` |
+| [Facturas](invoices.md) | `Invoices` |
+| [Contactos](contacts.md) | `Contacts` |
+| [Pagos](payments.md) | `Payments` |
+| [Ítems](items.md) | `Items` |
+| [Cotizaciones](estimates.md) | `Estimates` |
+| [Órdenes de compra](purchase_orders.md) | `PurchaseOrders` |
+| [Cuentas bancarias](bank_accounts.md) | `BankAccounts` |
+| [Impuestos](taxes.md) | `Taxes` |
+| [Monedas](currencies.md) | `Currencies` |
+| [Retenciones](retentions.md) | `Retentions` |
+| [Usuarios](users.md) | `Users` |
+
+Para los campos de cada recurso consulta la [documentación oficial de Alegra](https://developer.alegra.com/).
