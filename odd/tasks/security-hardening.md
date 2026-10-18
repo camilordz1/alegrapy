@@ -52,7 +52,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 | Task | Commit | Tests | Review tier / outcome |
 |------|--------|-------|------------------------|
 | T1 | 8fd5165 | RED: 3 errors (no `timeout` kwarg/param); GREEN: 16 tests OK | high; granted; approved + acknowledged (lineage review-3bb45dcdd52fe328) |
-| T2 | HASH | RED: 21 ran, 1 failure + 18 errors (invalid ids reached the mocked request); GREEN: 21 tests OK | pending assessment |
+| T2 | f818ae0 | RED: 21 ran, 1 failure + 18 errors (invalid ids reached the mocked request); GREEN: 21 tests OK | pending assessment |
 
 ### Follow-ups from T1 review (non-blocking)
 - R4 WARNING: a timeout on non-idempotent POSTs (invoices, payments) is ambiguous; the record may
