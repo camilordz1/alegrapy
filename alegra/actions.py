@@ -1,3 +1,4 @@
+import numbers
 import re
 from typing import Any, Dict, List, Optional, Union
 
@@ -8,16 +9,17 @@ def validate_id(id: Union[int, str]) -> Union[int, str]:
     """Validate a resource ID before it is placed in a URL path.
 
     Args:
-        id (int or str): A non-negative int, or a string of letters, digits, '_' or '-'.
+        id (int or str): A non-negative integral number (bool excluded), or a string of
+            letters, digits, '_' or '-'.
 
     Returns:
-        int or str: The same ID, unchanged.
+        int or str: The ID; integral numbers are normalized to a plain ``int``.
 
     Raises:
         ValueError: If the ID could alter the URL path or query (e.g. contains '/', '.', '?').
     """
-    if isinstance(id, int) and not isinstance(id, bool) and id >= 0:
-        return id
+    if isinstance(id, numbers.Integral) and not isinstance(id, bool) and id >= 0:
+        return int(id)
     if isinstance(id, str) and _ID_PATTERN.fullmatch(id):
         return id
     raise ValueError(
@@ -54,6 +56,25 @@ class Actions:
         """Set the client instance for this resource."""
         self._client = value
 
+    def _collection_url(self) -> str:
+        """Build the collection URL for this resource (base URL plus endpoint)."""
+        return f"{self.client.url}{self.endpoint}"
+
+    def _resource_url(self, id: Union[int, str], *suffix: str) -> str:
+        """Build the URL of a single resource, validating its ID first.
+
+        Args:
+            id (int or str): Resource ID; validated before use.
+            *suffix (str): Fixed path segments appended after the ID (e.g. 'void').
+
+        Returns:
+            str: The collection URL, ID and suffix segments joined with '/'.
+
+        Raises:
+            ValueError: If the ID is not a valid resource identifier.
+        """
+        return "/".join((self._collection_url(), str(validate_id(id)), *suffix))
+
     def read(self, id: Union[int, str], **kwargs: Any) -> Any:
         """Search and retrieve a single resource by its ID.
 
@@ -67,7 +88,7 @@ class Actions:
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}"
+        endpoint = self._resource_url(id)
         return self.client.query('get', endpoint, params=kwargs)
 
     def list(self, start: int = 0, limit: int = 30, **kwargs: Any) -> List[Any]:
@@ -81,7 +102,7 @@ class Actions:
         Returns:
             List[Any]: A list of matching resources.
         """
-        endpoint = f"{self.client.url}{self.endpoint}"
+        endpoint = self._collection_url()
         params = {
             'start': start,
             'limit': limit,
@@ -101,7 +122,7 @@ class Actions:
         Returns:
             Any: The parsed JSON response from the server.
         """
-        endpoint = f"{self.client.url}{self.endpoint}"
+        endpoint = self._collection_url()
         return self.client.query('post', endpoint, data=params, params=kwargs)
 
     def update(self, id: Union[int, str], params: Dict[str, Any], **kwargs: Any) -> Any:
@@ -118,7 +139,7 @@ class Actions:
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}"
+        endpoint = self._resource_url(id)
         return self.client.query('put', endpoint, data=params, params=kwargs)
 
     def delete(self, id: Union[int, str], **kwargs: Any) -> Any:
@@ -134,7 +155,7 @@ class Actions:
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}"
+        endpoint = self._resource_url(id)
         return self.client.query('delete', endpoint, params=kwargs)
 
     def _upload_file(self, endpoint: str, file_path: str, field_name: str = 'file') -> Any:
@@ -172,7 +193,7 @@ class Actions:
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}/attachment"
+        endpoint = self._resource_url(id, "attachment")
         return self._upload_file(endpoint, file_path, field_name)
 
 

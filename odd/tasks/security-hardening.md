@@ -38,6 +38,7 @@ This is a library consumed by other applications; callers may pass end-user inpu
 ## Tasks
 - [x] T1 — Default request timeout (route: delegated writer; trigger: preparation + tests)
 - [x] T2 — Validate resource ids before building URLs (route: delegated writer; trigger: 2+ non-trivial files)
+- [x] T2b — Accept `numbers.Integral` ids and centralize URL building (reopened from T2 review: R3/R4 WARNING int-like regression, R2 WARNING duplicated builder; route: delegated writer with T3)
 - [ ] T3 — Enforce HTTPS base URL (route: delegated writer; trigger: preparation + tests)
 - [ ] T4 — Pairwise credential resolution and per-request headers (route: delegated writer; trigger: preparation + tests)
 - [ ] T5 — Stop logging response bodies / exception text (route: delegated writer; trigger: preparation + tests)
@@ -52,7 +53,8 @@ This is a library consumed by other applications; callers may pass end-user inpu
 | Task | Commit | Tests | Review tier / outcome |
 |------|--------|-------|------------------------|
 | T1 | 8fd5165 | RED: 3 errors (no `timeout` kwarg/param); GREEN: 16 tests OK | high; granted; approved + acknowledged (lineage review-3bb45dcdd52fe328) |
-| T2 | f818ae0 | RED: 21 ran, 1 failure + 18 errors (invalid ids reached the mocked request); GREEN: 21 tests OK | pending assessment |
+| T2 | f818ae0 | RED: 21 ran, 1 failure + 18 errors (invalid ids reached the mocked request); GREEN: 21 tests OK | high; granted; approved + acknowledged (lineage review-f888d8c17b28c6f1); range 8fd5165..52c21d3 |
+| T2b | (this commit: refactor(actions)) | RED: 23 ran, 1 error (`test_int_like_ids_are_accepted` against committed source); GREEN: 23 tests OK | pending assessment |
 
 ### Follow-ups from T1 review (non-blocking)
 - R4 WARNING: a timeout on non-idempotent POSTs (invoices, payments) is ambiguous; the record may
@@ -60,7 +62,18 @@ This is a library consumed by other applications; callers may pass end-user inpu
 - R3/R2 suggestions: validate `timeout` (positive number), clarify that `timeout=None` means
   "use global default", and test the `timeout` setter.
 
-Reviewed boundary: `8fd5165`.
+### Follow-ups from T2 review (non-blocking, accepted into T2b)
+- R3/R4 WARNING: `validate_id` rejects int-like types (`numpy.int64`, etc.) that worked before; accept `numbers.Integral` (non-bool, >= 0).
+- R2 WARNING: 14 copies of the URL f-string; add one helper that validates and builds the resource URL.
+- R2/R3 SUGGESTION: `test_valid_ids_are_accepted` must assert every URL, including id `0` and `"123"`.
+
+### T2b interruption note
+- The delegated writer was interrupted when the app closed; it left `_resource_url` calling itself
+  (unbounded recursion that exhausted memory and killed the test process, exit 137).
+- Parent finished T2b inline: split `_collection_url()` (list/create) from `_resource_url(id, *suffix)`
+  (always validates), so `read(None)` is still rejected instead of hitting the collection URL.
+
+Reviewed boundary: `52c21d3`.
 
 ## Next step
-T2.
+Assess T2b, then T3.

@@ -2,11 +2,34 @@ import unittest
 from unittest.mock import patch, MagicMock
 import base64
 import json
+import numbers
 
 import requests
 
 import alegra
 from alegra import session, contacts, invoices, payments, items, AlegraClient, AlegraAPIError
+
+class _IntLike:
+    """Minimal stand-in for integral types such as numpy.int64."""
+
+    def __init__(self, value):
+        self._value = value
+
+    def __int__(self):
+        return self._value
+
+    def __index__(self):
+        return self._value
+
+    def __ge__(self, other):
+        return self._value >= other
+
+    def __repr__(self):
+        return f"_IntLike({self._value})"
+
+
+numbers.Integral.register(_IntLike)
+
 
 class TestAlegraPy(unittest.TestCase):
 
@@ -381,9 +404,32 @@ class TestAlegraPy(unittest.TestCase):
 
         urls = [c.args[1] if len(c.args) > 1 else c.kwargs['url']
                 for c in mock_request.call_args_list]
-        self.assertEqual(len(urls), 4)
-        self.assertTrue(urls[1].endswith('/contacts/123'))
-        self.assertTrue(urls[3].endswith('/contacts/abc_DEF-9'))
+        base = "https://api.alegra.com/api/v1/contacts/"
+        self.assertEqual(urls, [base + "0", base + "123", base + "123", base + "abc_DEF-9"])
+
+    @patch('requests.Session.request')
+    def test_int_like_ids_are_accepted(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        client = AlegraClient(user="user", token="token")
+
+        client.contacts.read(_IntLike(42))
+        client.invoices.void(_IntLike(7))
+
+        urls = [c.args[1] if len(c.args) > 1 else c.kwargs['url']
+                for c in mock_request.call_args_list]
+        self.assertEqual(urls, [
+            "https://api.alegra.com/api/v1/contacts/42",
+            "https://api.alegra.com/api/v1/invoices/7/void",
+        ])
+
+    @patch('requests.Session.request')
+    def test_negative_int_like_id_is_rejected(self, mock_request):
+        client = AlegraClient(user="user", token="token")
+
+        with self.assertRaises(ValueError):
+            client.contacts.read(_IntLike(-1))
+
+        mock_request.assert_not_called()
 
     @patch('os.path.exists')
     @patch('builtins.open', create=True)

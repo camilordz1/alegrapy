@@ -1,5 +1,5 @@
 from typing import Any, Optional, Union
-from alegra.actions import Actions, validate_id
+from alegra.actions import Actions
 
 
 class Payments(Actions):
@@ -26,7 +26,7 @@ class Payments(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}/void"
+        endpoint = self._resource_url(id, "void")
         return self.client.query('post', endpoint)
 
     def open(self, id: Union[int, str]) -> Any:
@@ -41,7 +41,7 @@ class Payments(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}/open"
+        endpoint = self._resource_url(id, "open")
         return self.client.query('post', endpoint)
 
 

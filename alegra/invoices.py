@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
-from alegra.actions import Actions, validate_id
+from alegra.actions import Actions
 
 
 class Invoices(Actions):
@@ -31,7 +31,7 @@ class Invoices(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}/email"
+        endpoint = self._resource_url(id, "email")
         data: Dict[str, Any] = {
             "emails": emails if isinstance(emails, list) else [emails],
             "sendCopyToUser": send_copy_to_user
@@ -52,7 +52,7 @@ class Invoices(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}/void"
+        endpoint = self._resource_url(id, "void")
         return self.client.query('post', endpoint)
 
     def open(self, id: Union[int, str]) -> Any:
@@ -67,7 +67,7 @@ class Invoices(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        endpoint = f"{self.client.url}{self.endpoint}/{validate_id(id)}/open"
+        endpoint = self._resource_url(id, "open")
         return self.client.query('post', endpoint)
 
 
