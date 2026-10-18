@@ -26,17 +26,20 @@ class AlegraClient:
 
     Allows managing multiple API sessions with different credentials.
     """
-    def __init__(self, user: Optional[str] = None, token: Optional[str] = None, url: Optional[str] = None) -> None:
+    def __init__(self, user: Optional[str] = None, token: Optional[str] = None, url: Optional[str] = None,
+                 timeout: Optional[float] = None) -> None:
         """Initialize the client.
 
         Args:
             user (str, optional): Alegra username (email).
             token (str, optional): Alegra API token.
             url (str, optional): Custom base API URL. Defaults to 'https://api.alegra.com/api/v1/'.
+            timeout (float, optional): Request timeout in seconds. Defaults to the global session timeout (30).
         """
         self._user = user
         self._token = token
         self._url = url
+        self._timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({
             'Accept': 'application/json',
@@ -163,6 +166,16 @@ class AlegraClient:
         """Set the base API URL."""
         self._url = value
 
+    @property
+    def timeout(self) -> float:
+        """Get the request timeout in seconds."""
+        return self._timeout if self._timeout is not None else session.timeout
+
+    @timeout.setter
+    def timeout(self, value: Optional[float]) -> None:
+        """Set the request timeout in seconds."""
+        self._timeout = value
+
     def get_auth_header(self) -> str:
         """Generate the Basic Authorization header string from credentials.
 
@@ -211,7 +224,8 @@ class AlegraClient:
                 json=data,
                 params=params,
                 headers=headers,
-                files=files
+                files=files,
+                timeout=self.timeout
             )
         except Exception as e:
             logger.error(f"HTTP request failed: {e}")
@@ -249,6 +263,7 @@ class session:
     user: Optional[str] = None
     token: Optional[str] = None
     url: str = "https://api.alegra.com/api/v1/"
+    timeout: float = 30
     headers: Dict[str, str] = {'Accept': 'application/json', 'Content-type': 'application/json'}
 
     @classmethod

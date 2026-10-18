@@ -3,6 +3,8 @@ from unittest.mock import patch, MagicMock
 import base64
 import json
 
+import requests
+
 import alegra
 from alegra import session, contacts, invoices, payments, items, AlegraClient, AlegraAPIError
 
@@ -13,7 +15,8 @@ class TestAlegraPy(unittest.TestCase):
         session.user = None
         session.token = None
         session.url = "https://api.alegra.com/api/v1/"
-        
+        session.timeout = 30
+
         # We also reset any default client state if needed
         # (This will be defined in session.py later)
         if hasattr(session, 'default_client'):
@@ -261,6 +264,57 @@ class TestAlegraPy(unittest.TestCase):
         url = kwargs.get('url') or args[1]
         self.assertEqual(method.lower(), 'get')
         self.assertTrue(url.endswith('/users/self'))
+
+    @staticmethod
+    def _ok_response():
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{}'
+        mock_response.json.return_value = {}
+        return mock_response
+
+    @patch('requests.Session.request')
+    def test_default_timeout_is_passed(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        client = AlegraClient(user="user", token="token")
+        client.contacts.read(1)
+
+        args, kwargs = mock_request.call_args
+        self.assertEqual(kwargs['timeout'], 30)
+
+    @patch('requests.Session.request')
+    def test_custom_client_timeout_is_passed(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        client = AlegraClient(user="user", token="token", timeout=5)
+        client.contacts.read(1)
+
+        args, kwargs = mock_request.call_args
+        self.assertEqual(kwargs['timeout'], 5)
+
+    @patch('requests.Session.request')
+    def test_legacy_session_timeout_is_honored(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        session.timeout = 12
+
+        session.user = "test_user@example.com"
+        session.token = "test_token_123"
+        contacts().read(1)
+
+        args, kwargs = mock_request.call_args
+        self.assertEqual(kwargs['timeout'], 12)
+
+    @patch('requests.Session.request')
+    def test_timeout_raises_alegra_api_error(self, mock_request):
+        mock_request.side_effect = requests.exceptions.Timeout("timed out")
+
+        client = AlegraClient(user="user", token="token")
+
+        with self.assertRaises(AlegraAPIError) as ctx:
+            client.contacts.read(1)
+
+        self.assertIn("HTTP request failed", str(ctx.exception))
 
     @patch('os.path.exists')
     @patch('builtins.open', create=True)
