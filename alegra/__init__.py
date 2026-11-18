@@ -1,4 +1,13 @@
 from alegra.session import AlegraClient, AlegraAPIError, session
+from alegra.exceptions import (
+    AlegraAuthError,
+    AlegraNotFoundError,
+    AlegraValidationError,
+    AlegraRateLimitError,
+    AlegraServerError,
+    AlegraConnectionError,
+    AlegraTimeoutError,
+)
 from alegra.actions import Actions, actions
 from alegra.invoices import Invoices, invoices
 from alegra.contacts import Contacts, contacts
@@ -15,6 +24,13 @@ from alegra.users import Users, users
 __all__ = [
     'AlegraClient',
     'AlegraAPIError',
+    'AlegraAuthError',
+    'AlegraNotFoundError',
+    'AlegraValidationError',
+    'AlegraRateLimitError',
+    'AlegraServerError',
+    'AlegraConnectionError',
+    'AlegraTimeoutError',
     'session',
     'Actions',
     'actions',

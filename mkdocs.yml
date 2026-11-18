@@ -60,6 +60,7 @@ nav:
   - Referencia de la API:
       - Introducción: referencia/index.md
       - Cliente y errores: referencia/session.md
+      - Excepciones: referencia/exceptions.md
       - Actions: referencia/actions.md
       - Facturas: referencia/invoices.md
       - Contactos: referencia/contacts.md

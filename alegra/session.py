@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlsplit
 import requests
 
+from alegra.exceptions import (AlegraAPIError, _error_for_exception, _error_for_status)
+
 # Create a dedicated logger for the library, allowing applications to configure it
 logger = logging.getLogger("alegra")
 
@@ -39,20 +41,6 @@ def _validate_base_url(url: str) -> str:
         f"Insecure base URL (scheme {parts.scheme!r}, host {host!r}): https is required "
         f"(http is allowed only for {', '.join(sorted(_LOOPBACK_HOSTS))})"
     )
-
-
-class AlegraAPIError(Exception):
-    """Exception raised for errors in the Alegra API response.
-
-    Attributes:
-        message (str): Explanation of the error.
-        status_code (int, optional): HTTP status code returned by the API.
-        response_body (str, optional): Raw response body text from the server.
-    """
-    def __init__(self, message: str, status_code: Optional[int] = None, response_body: Optional[str] = None) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.response_body = response_body
 
 
 class AlegraClient:
@@ -281,7 +269,8 @@ class AlegraClient:
 
         Raises:
             AlegraAPIError: If the server returns a non-2xx status code or a request error occurs
-                (transport errors chain the original exception as ``__cause__``).
+                (transport errors chain the original exception as ``__cause__``). Typed subclasses
+                are raised for known HTTP statuses and transport failures.
             ValueError: If the resolved base URL is not https (or loopback http); nothing is sent.
         """
         # Also covers the legacy global session.url, which is a plain class attribute
@@ -310,7 +299,7 @@ class AlegraClient:
         except Exception as e:
             # Exception text may include the URL and query params, so log only the class name
             logger.error(f"{method.upper()} - {self._log_path(url)} - request failed ({type(e).__name__})")
-            raise AlegraAPIError(f"HTTP request failed ({type(e).__name__})") from e
+            raise _error_for_exception(e) from e
 
         short_url = self._log_path(url)
 
@@ -336,7 +325,7 @@ class AlegraClient:
 
         # The API message may contain user data: it stays in the exception, never in the logs
         logger.warning(f"{method.upper()} - {short_url} - Failed! (Status: {response.status_code})")
-        raise AlegraAPIError(error_msg, status_code=response.status_code, response_body=response.text)
+        raise _error_for_status(error_msg, response.status_code, response.text, response.headers)
 
 
 class session:

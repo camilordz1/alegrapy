@@ -711,6 +711,166 @@ class TestAlegraPy(unittest.TestCase):
         self.assertIn('files', kwargs)
         self.assertEqual(kwargs['files']['file'][0], 'dummy.txt')
 
+class TestTypedExceptions(unittest.TestCase):
+    """Typed errors reachable without breaking `except AlegraAPIError`."""
+
+    def setUp(self):
+        session.user = None
+        session.token = None
+        session.url = "https://api.alegra.com/api/v1/"
+        session.timeout = 30
+        default_client = sys.modules['alegra.session'].default_client
+        default_client._user = None
+        default_client._token = None
+
+    @staticmethod
+    def _response(status_code, headers=None):
+        response = MagicMock()
+        response.status_code = status_code
+        response.text = '{"message": "boom"}'
+        response.json.return_value = {"message": "boom"}
+        response.headers = headers if headers is not None else {}
+        return response
+
+    def _error_for_response(self, response):
+        with patch('requests.Session.request', return_value=response):
+            client = AlegraClient(user="user", token="token")
+            with self.assertRaises(AlegraAPIError) as ctx:
+                client.contacts.read(1)
+        return ctx.exception
+
+    def _error_for_transport(self, original):
+        with patch('requests.Session.request', side_effect=original):
+            client = AlegraClient(user="user", token="token")
+            with self.assertRaises(AlegraAPIError) as ctx:
+                client.contacts.list()
+        return ctx.exception
+
+    def test_status_codes_map_to_typed_errors(self):
+        from alegra import (AlegraAuthError, AlegraNotFoundError, AlegraValidationError,
+                            AlegraRateLimitError, AlegraServerError)
+        expected = {
+            400: AlegraValidationError,
+            401: AlegraAuthError,
+            403: AlegraAuthError,
+            404: AlegraNotFoundError,
+            422: AlegraValidationError,
+            429: AlegraRateLimitError,
+            500: AlegraServerError,
+            503: AlegraServerError,
+            409: AlegraAPIError,
+        }
+        for status, cls in expected.items():
+            with self.subTest(status=status):
+                error = self._error_for_response(self._response(status))
+                self.assertIs(type(error), cls)
+
+    def test_typed_errors_subclass_base_and_keep_attributes(self):
+        from alegra import AlegraNotFoundError
+        error = self._error_for_response(self._response(404))
+
+        self.assertIsInstance(error, AlegraAPIError)
+        self.assertIsInstance(error, AlegraNotFoundError)
+        self.assertEqual(error.status_code, 404)
+        self.assertEqual(error.response_body, '{"message": "boom"}')
+        self.assertEqual(str(error), "boom")
+
+    def test_connect_timeout_is_a_connection_error(self):
+        from alegra import AlegraConnectionError
+        from requests.exceptions import ConnectTimeout
+
+        original = ConnectTimeout("connection timed out before sending")
+        error = self._error_for_transport(original)
+
+        self.assertIs(type(error), AlegraConnectionError)
+        self.assertIs(error.__cause__, original)
+        self.assertIsNone(error.status_code)
+        self.assertIsNone(error.response_body)
+
+    def test_read_timeout_is_a_timeout_error(self):
+        from alegra import AlegraTimeoutError
+        from requests.exceptions import ReadTimeout
+
+        original = ReadTimeout("waiting for the response timed out")
+        error = self._error_for_transport(original)
+
+        self.assertIs(type(error), AlegraTimeoutError)
+        self.assertIs(error.__cause__, original)
+        self.assertIsNone(error.status_code)
+
+    def test_connection_error_is_a_connection_error(self):
+        from alegra import AlegraConnectionError
+        from requests.exceptions import ConnectionError as RequestsConnectionError
+
+        original = RequestsConnectionError("dns failure")
+        error = self._error_for_transport(original)
+
+        self.assertIs(type(error), AlegraConnectionError)
+        self.assertIs(error.__cause__, original)
+
+    def test_other_request_exceptions_stay_base_class(self):
+        from requests.exceptions import TooManyRedirects
+
+        original = TooManyRedirects("too many redirects")
+        error = self._error_for_transport(original)
+
+        self.assertIs(type(error), AlegraAPIError)
+        self.assertIs(error.__cause__, original)
+
+    def test_retry_after_delta_seconds(self):
+        error = self._error_for_response(self._response(429, {"Retry-After": "7"}))
+
+        self.assertEqual(error.retry_after, 7.0)
+
+    def test_retry_after_http_date(self):
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        target = datetime.now(timezone.utc) + timedelta(seconds=90)
+        header = format_datetime(target, usegmt=True)
+        error = self._error_for_response(self._response(503, {"Retry-After": header}))
+
+        self.assertAlmostEqual(error.retry_after, 90, delta=5)
+
+    def test_retry_after_negative_is_zero(self):
+        error = self._error_for_response(self._response(429, {"Retry-After": "-5"}))
+
+        self.assertEqual(error.retry_after, 0.0)
+
+    def test_retry_after_unparseable_is_none(self):
+        error = self._error_for_response(self._response(429, {"Retry-After": "soon"}))
+
+        self.assertIsNone(error.retry_after)
+
+    def test_retry_after_missing_is_none(self):
+        error = self._error_for_response(self._response(500))
+
+        self.assertIsNone(error.retry_after)
+
+    @patch('requests.Session.request')
+    def test_legacy_path_raises_typed_errors(self, mock_request):
+        from alegra import AlegraNotFoundError
+
+        mock_request.return_value = self._response(404)
+        session.user = "legacy_user@example.com"
+        session.token = "legacy_token"
+
+        with self.assertRaises(AlegraNotFoundError) as ctx:
+            contacts().read(1)
+
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_public_imports(self):
+        from alegra import AlegraNotFoundError
+        from alegra.exceptions import AlegraAPIError as ModuleError
+        from alegra.session import AlegraAPIError as LegacyImport
+
+        self.assertIs(ModuleError, AlegraAPIError)
+        self.assertIs(LegacyImport, AlegraAPIError)
+        self.assertTrue(issubclass(AlegraNotFoundError, AlegraAPIError))
+        self.assertIn("AlegraNotFoundError", alegra.__all__)
+
+
 if __name__ == '__main__':
     unittest.main()
 
