@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 import base64
 import json
 import numbers
+import sys
 
 import requests
 
@@ -40,11 +41,11 @@ class TestAlegraPy(unittest.TestCase):
         session.url = "https://api.alegra.com/api/v1/"
         session.timeout = 30
 
-        # We also reset any default client state if needed
-        # (This will be defined in session.py later)
-        if hasattr(session, 'default_client'):
-            session.default_client._user = None
-            session.default_client._token = None
+        # The legacy class shadows the module on the package, so reach the module itself
+        # to reset the global default client's credentials.
+        default_client = sys.modules['alegra.session'].default_client
+        default_client._user = None
+        default_client._token = None
 
     @patch('requests.Session.request')
     def test_legacy_read_and_list(self, mock_request):
