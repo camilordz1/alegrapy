@@ -860,6 +860,80 @@ class TestTypedExceptions(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
 
+    def test_non_request_exception_propagates_unwrapped(self):
+        original = TypeError("Object of type Decimal is not JSON serializable")
+        with patch('requests.Session.request', side_effect=original):
+            client = AlegraClient(user="user", token="token")
+            with self.assertNoLogs("alegra", level="ERROR"):
+                with self.assertRaises(TypeError) as ctx:
+                    client.contacts.list()
+
+        self.assertIs(ctx.exception, original)
+
+    def test_204_returns_empty_dict(self):
+        response = self._response(204)
+        response.text = ""
+
+        with patch('requests.Session.request', return_value=response):
+            client = AlegraClient(user="user", token="token")
+            self.assertEqual(client.contacts.read(1), {})
+
+    def test_empty_or_whitespace_body_returns_empty_dict(self):
+        for body in ("", "   \n\t "):
+            with self.subTest(body=repr(body)):
+                response = self._response(200)
+                response.text = body
+
+                with patch('requests.Session.request', return_value=response):
+                    client = AlegraClient(user="user", token="token")
+                    self.assertEqual(client.contacts.read(1), {})
+
+    def test_non_json_success_body_returns_response_text(self):
+        response = self._response(200)
+        response.text = "plain text answer"
+        response.json.side_effect = ValueError("no json")
+
+        with patch('requests.Session.request', return_value=response):
+            client = AlegraClient(user="user", token="token")
+            self.assertEqual(client.contacts.read(1), {"response_text": "plain text answer"})
+
+    def test_error_with_non_dict_json_uses_generic_message(self):
+        from alegra import AlegraRateLimitError
+
+        response = self._response(429)
+        response.text = '["rate limited"]'
+        response.json.return_value = ["rate limited"]
+
+        error = self._error_for_response(response)
+
+        self.assertIs(type(error), AlegraRateLimitError)
+        self.assertEqual(str(error), "API error (Status 429)")
+        self.assertEqual(error.response_body, '["rate limited"]')
+
+    def test_error_without_message_uses_generic_message(self):
+        from alegra import AlegraValidationError
+
+        response = self._response(400)
+        response.text = '{"errors": "invalid"}'
+        response.json.return_value = {"errors": "invalid"}
+
+        error = self._error_for_response(response)
+
+        self.assertIs(type(error), AlegraValidationError)
+        self.assertEqual(str(error), "API error (Status 400)")
+
+    def test_error_with_non_json_body_uses_body_as_message(self):
+        from alegra import AlegraServerError
+
+        response = self._response(503)
+        response.text = "upstream unavailable"
+        response.json.side_effect = ValueError("no json")
+
+        error = self._error_for_response(response)
+
+        self.assertIs(type(error), AlegraServerError)
+        self.assertEqual(str(error), "upstream unavailable")
+
     def test_public_imports(self):
         from alegra import AlegraNotFoundError
         from alegra.exceptions import AlegraAPIError as ModuleError

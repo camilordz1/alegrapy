@@ -270,7 +270,9 @@ class AlegraClient:
         Raises:
             AlegraAPIError: If the server returns a non-2xx status code or a request error occurs
                 (transport errors chain the original exception as ``__cause__``). Typed subclasses
-                are raised for known HTTP statuses and transport failures.
+                are raised for known HTTP statuses and transport failures. Only
+                ``requests.RequestException`` failures are wrapped: other exceptions, such as a
+                payload that cannot be JSON-serialized, propagate unchanged.
             ValueError: If the resolved base URL is not https (or loopback http); nothing is sent.
         """
         # Also covers the legacy global session.url, which is a plain class attribute
@@ -296,7 +298,7 @@ class AlegraClient:
                 files=files,
                 timeout=self.timeout
             )
-        except Exception as e:
+        except requests.RequestException as e:
             # Exception text may include the URL and query params, so log only the class name
             logger.error(f"{method.upper()} - {self._log_path(url)} - request failed ({type(e).__name__})")
             raise _error_for_exception(e) from e

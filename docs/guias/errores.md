@@ -85,6 +85,25 @@ datos sensibles.
     Un timeout en un `POST` es ambiguo: el registro pudo haberse creado. Consulta
     [Seguridad](seguridad.md) antes de reintentar.
 
+## Errores de programación
+
+Solo los fallos de red de `requests` se envuelven en excepciones de AlegraPy. Cualquier otro
+error de Python se propaga sin cambios, para no ocultar el bug real. Por ejemplo, un payload con
+un `Decimal` o un `datetime` que no se puede serializar a JSON lanza `TypeError` tal cual:
+
+```python
+from decimal import Decimal
+from alegra import AlegraAPIError
+
+try:
+    client.invoices.create({"total": Decimal("100.00")})
+except TypeError as e:
+    # No es un error de Alegra: el payload no se pudo serializar
+    print("Payload inválido:", e)
+except AlegraAPIError as e:
+    print("Alegra respondió con un error:", e)
+```
+
 ## `ValueError`
 
 Se lanza `ValueError` antes de enviar cualquier petición cuando:
