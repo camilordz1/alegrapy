@@ -1,5 +1,7 @@
 # AlegraPy
 
+[![Tests](https://github.com/camilordz1/alegrapy_pkg/actions/workflows/tests.yml/badge.svg)](https://github.com/camilordz1/alegrapy_pkg/actions/workflows/tests.yml)
+
 Este paquete nos permite consumir la API de la plataforma de facturación [Alegra](https://www.alegra.com/) de forma sencilla mediante Python 🐍.
 
 📚 **Documentación**: <https://camilordz1.github.io/alegrapy_pkg/>. Para verla en local: `pip install -r requirements-docs.txt && mkdocs serve`.
