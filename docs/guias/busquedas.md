@@ -14,7 +14,8 @@ No lanzan excepción si no encuentran nada: revisa la longitud.
 ## Cómo buscan
 
 1. Acotan la consulta en el servidor con el filtro documentado (`identification=` o
-   `reference=`).
+   `reference=`), enviando el valor ya normalizado (ver las reglas abajo). Así una entrada como
+   `" 900.559.088 "` consulta `900559088`.
 2. Recorren **todas** las páginas con [`iter_all`](paginacion.md). El modo de coincidencia del
    servidor no está documentado y puede ser “contiene”, así que leer solo la primera página
    perdería resultados.

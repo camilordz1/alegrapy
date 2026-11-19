@@ -1709,6 +1709,35 @@ class TestSearchHelpers(unittest.TestCase):
         self.assertEqual(params['identification'], "900559088")
         self.assertEqual((params['start'], params['limit']), (0, 30))
 
+    def test_contacts_server_filter_receives_normalized_identification(self):
+        client, query = self._client([[{"id": 1, "identification": "900559088"}]])
+
+        result = client.contacts.find_by_identification(" 900.559.088 ")
+
+        self.assertEqual([record["id"] for record in result], [1])
+        self.assertEqual(query.call_args.kwargs['params']['identification'], "900559088")
+
+    def test_items_server_filter_receives_stripped_reference(self):
+        client, query = self._client([[{"id": 1, "reference": "TP-15210"}]])
+
+        result = client.items.find_by_reference("  TP-15210 ")
+
+        self.assertEqual([record["id"] for record in result], [1])
+        self.assertEqual(query.call_args.kwargs['params']['reference'], "TP-15210")
+
+    def test_helpers_reject_pagination_filters_without_requests(self):
+        for forbidden in ("start", "limit", "metadata"):
+            with self.subTest(helper="contacts", filter=forbidden):
+                client, query = self._client([])
+                with self.assertRaises(ValueError):
+                    client.contacts.find_by_identification("900559088", **{forbidden: 1})
+                query.assert_not_called()
+            with self.subTest(helper="items", filter=forbidden):
+                client, query = self._client([])
+                with self.assertRaises(ValueError):
+                    client.items.find_by_reference("TP-15210", **{forbidden: 1})
+                query.assert_not_called()
+
     def test_contacts_find_match_on_a_later_page(self):
         first_page = [{"id": index, "identification": f"OTHER-{index}"} for index in range(30)]
         second_page = [{"id": 31, "identification": "222222222222"}]

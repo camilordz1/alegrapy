@@ -52,7 +52,8 @@ class Items(Actions):
 
         needle = _normalize_reference(reference)
         matches = []
-        for record in self.iter_all(reference=reference, **filters):
+        # The server gets the stripped value too, so a padded input still narrows
+        for record in self.iter_all(reference=needle, **filters):
             value = _reference_value(record)
             if value is not None and _normalize_reference(value) == needle:
                 matches.append(record)

@@ -59,7 +59,8 @@ class Contacts(Actions):
 
         needle = _normalize_identification(identification)
         matches = []
-        for record in self.iter_all(identification=identification, **filters):
+        # The server gets the normalized value too, so a dotted or padded input still narrows
+        for record in self.iter_all(identification=needle, **filters):
             value = _identification_value(record)
             if value is not None and _normalize_identification(value) == needle:
                 matches.append(record)
