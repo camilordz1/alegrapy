@@ -1,30 +1,31 @@
 import copy
+import enum
+import json
 import logging
 import math
 import numbers
 import os
-import re
 import tempfile
 import time
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urljoin, urlsplit
 
 import requests
 
+from alegra._create_once import (contains_marker, marker_for, payload_with_marker,
+                                 run_create_once, validate_dedup_key,
+                                 validate_lookup_pages, validate_verify_window)
 from alegra.actions import Actions, validate_id
+from alegra.credit_notes import CreditNoteOperationType, CreditNoteType
+from alegra.dedup import make_dedup_key
 from alegra.exceptions import (AlegraAPIError, AlegraFileNotAvailableError,
-                               AlegraTimeoutError, AlegraUnverifiedCreateError,
+                               AlegraStampError, AlegraTimeoutError,
                                _error_for_exception, _error_for_status)
-from alegra.retry import _may_have_been_processed
 
 logger = logging.getLogger("alegra")
 
-_DEDUP_KEY_PATTERN = re.compile(r'[A-Za-z0-9_.:-]+')
-_MARKER_PREFIX = "alegrapy:dedup:"
-_MAX_OBSERVATIONS = 500
-_VERIFY_INITIAL_INTERVAL = 1.0
-_VERIFY_MAX_INTERVAL = 8.0
 _DEFAULT_MAX_BYTES = 25 * 1024 * 1024
 _XML_BOM = b"\xef\xbb\xbf"
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
@@ -56,43 +57,38 @@ def _file_url_host(url: str) -> str:
     return parts.hostname
 
 
-def _validate_dedup_key(dedup_key: Any) -> str:
-    """Validate and strip a dedup key."""
-    if not isinstance(dedup_key, str):
-        raise ValueError("dedup_key must be a string")
-    key = dedup_key.strip()
-    if not 1 <= len(key) <= 64 or not _DEDUP_KEY_PATTERN.fullmatch(key):
-        raise ValueError(
-            "dedup_key must be 1..64 characters using letters, digits, '_', '.', ':' or '-'"
-        )
-    return key
+def _enum_value(value: Any) -> Any:
+    """Accept enum members or raw strings."""
+    return value.value if isinstance(value, enum.Enum) else value
 
 
-def _marker_for(key: str) -> str:
-    return f"{_MARKER_PREFIX}{key}"
+def _stamp_failure_document(error: AlegraAPIError) -> Optional[Dict[str, Any]]:
+    """Extract a created credit note from a stamp-failure 400 body, if present."""
+    if error.status_code != 400 or not error.response_body:
+        return None
+    try:
+        body = json.loads(error.response_body)
+    except (TypeError, ValueError):
+        return None
+    return _find_created_document(body)
 
 
-def _validate_lookup_pages(lookup_pages: Any) -> int:
-    if (isinstance(lookup_pages, bool) or not isinstance(lookup_pages, numbers.Integral)
-            or lookup_pages < 1):
-        raise ValueError("lookup_pages must be a positive integer")
-    return int(lookup_pages)
-
-
-def _validate_verify_window(verify_window: Any) -> float:
-    if (isinstance(verify_window, bool) or not isinstance(verify_window, numbers.Real)
-            or not math.isfinite(verify_window) or verify_window < 0):
-        raise ValueError("verify_window must be a finite, non-negative number")
-    return float(verify_window)
-
-
-def _contains_marker(invoice: Any, marker: str) -> bool:
-    if not isinstance(invoice, dict):
-        return False
-    observations = invoice.get("observations")
-    if not isinstance(observations, str):
-        return False
-    return any(line.strip() == marker for line in observations.splitlines())
+def _find_created_document(value: Any) -> Optional[Dict[str, Any]]:
+    """Find a document-looking object inside an error body."""
+    document_keys = ("status", "total", "stamp", "creditNoteOperationType", "number")
+    if isinstance(value, dict):
+        if "id" in value and any(key in value for key in document_keys):
+            return value
+        for child in value.values():
+            found = _find_created_document(child)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _find_created_document(child)
+            if found is not None:
+                return found
+    return None
 
 
 class Invoices(Actions):
@@ -126,14 +122,14 @@ class Invoices(Actions):
         Raises:
             ValueError: If the key, client id or ``lookup_pages`` are invalid.
         """
-        key = _validate_dedup_key(dedup_key)
-        pages = _validate_lookup_pages(lookup_pages)
-        marker = _marker_for(key)
+        key = validate_dedup_key(dedup_key)
+        pages = validate_lookup_pages(lookup_pages)
+        marker = marker_for(key)
         valid_client_id = validate_id(client_id)
 
         for invoice in self.iter_all(max_items=pages * 30, client_id=valid_client_id,
                                      order_field="id", order_direction="DESC"):
-            if _contains_marker(invoice, marker):
+            if contains_marker(invoice, marker):
                 return invoice
         return None
 
@@ -187,113 +183,34 @@ class Invoices(Actions):
             AlegraAPIError: The original error for a non-ambiguous failure.
             AlegraUnverifiedCreateError: When an ambiguous create cannot be verified.
         """
-        key = _validate_dedup_key(dedup_key)
+        key = validate_dedup_key(dedup_key)
         if on_unverified not in ("retry", "raise"):
             raise ValueError("on_unverified must be 'retry' or 'raise'")
-        window = _validate_verify_window(verify_window)
-        pages = _validate_lookup_pages(lookup_pages)
+        validate_verify_window(verify_window)
+        validate_lookup_pages(lookup_pages)
         if not isinstance(params, dict):
             raise ValueError("params must be a dict")
-        payload = self._payload_with_marker(params, key)
+        payload = payload_with_marker(params, key)
         client_id = self._client_id_from(params)
 
-        if precheck:
-            existing = self.reconcile(key, client_id, lookup_pages=pages)
-            if existing is not None:
-                return existing
-
-        attempts = 1
-        try:
-            return self.create(payload)
-        except AlegraAPIError as error:
-            if not _may_have_been_processed(error):
-                raise
-            last_error = error
-
-        found = self._verified_lookup(key, client_id, pages, window, payload, attempts, last_error)
-        if found is not None:
-            return found
-        if on_unverified == "raise":
-            raise self._unverified_error(key, client_id, payload, attempts, last_error) from last_error
-
-        logger.warning(
-            f"POST - /{self.endpoint} - dedup key {key!r} unverified; "
-            f"retrying create (attempt 2)"
+        return run_create_once(
+            post=self.create,
+            lookup=lambda: self.reconcile(key, client_id, lookup_pages=lookup_pages),
+            payload=payload,
+            dedup_key=key,
+            client_id=client_id,
+            resource=self.endpoint,
+            on_unverified=on_unverified,
+            verify_window=verify_window,
+            lookup_pages=lookup_pages,
+            precheck=precheck,
+            log_path=f"/{self.endpoint}",
         )
-        attempts = 2
-        try:
-            return self.create(payload)
-        except AlegraAPIError as error:
-            if not _may_have_been_processed(error):
-                # The first attempt may still have created the invoice, so quarantine it
-                raise self._unverified_error(key, client_id, payload, attempts, error) from error
-            last_error = error
-
-        found = self._verified_lookup(key, client_id, pages, window, payload, attempts, last_error)
-        if found is not None:
-            return found
-        raise self._unverified_error(key, client_id, payload, attempts, last_error) from last_error
-
-    def _verified_lookup(self, key: str, client_id: Union[int, str], lookup_pages: int,
-                         verify_window: float, payload: Dict[str, Any], attempts: int,
-                         cause: AlegraAPIError) -> Optional[Dict[str, Any]]:
-        """Run the verification window; wrap lookup failures as unverified creates."""
-        try:
-            return self._verify_until_found(key, client_id, lookup_pages, verify_window)
-        except AlegraAPIError as lookup_error:
-            raise self._unverified_error(key, client_id, payload, attempts, lookup_error,
-                                         details_source=cause) from lookup_error
-
-    def _verify_until_found(self, key: str, client_id: Union[int, str], lookup_pages: int,
-                            verify_window: float) -> Optional[Dict[str, Any]]:
-        """Look for the marker at increasing intervals until the window elapses."""
-        deadline = time.monotonic() + verify_window
-        interval = _VERIFY_INITIAL_INTERVAL
-        lookup = 0
-
-        while True:
-            lookup += 1
-            logger.warning(
-                f"POST - /{self.endpoint} - verifying dedup key {key!r} (lookup {lookup})"
-            )
-            found = self.reconcile(key, client_id, lookup_pages=lookup_pages)
-            if found is not None:
-                return found
-
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return None
-            time.sleep(min(interval, remaining))
-            interval = min(interval * 2, _VERIFY_MAX_INTERVAL)
 
     @staticmethod
     def _payload_with_marker(params: Dict[str, Any], key: str) -> Dict[str, Any]:
-        """Build a copy of ``params`` with the dedup marker on its own line.
-
-        Re-submitting a stored payload is safe: an existing identical marker is kept
-        as-is instead of appended again, and a payload carrying a different dedup key is
-        rejected.
-        """
-        payload = copy.deepcopy(params)
-        existing = payload.get("observations")
-        marker = _marker_for(key)
-
-        if existing:
-            lines = [line.strip() for line in str(existing).splitlines()]
-            if marker in lines:
-                return payload
-            if any(line.startswith(_MARKER_PREFIX) for line in lines):
-                raise ValueError("observations already contains a different dedup marker")
-            observations = f"{existing}\n{marker}"
-        else:
-            observations = marker
-
-        if len(observations) > _MAX_OBSERVATIONS:
-            raise ValueError(
-                f"observations would exceed {_MAX_OBSERVATIONS} characters with the dedup marker"
-            )
-        payload["observations"] = observations
-        return payload
+        """Build a copy of ``params`` with the dedup marker on its own line."""
+        return payload_with_marker(params, key)
 
     @staticmethod
     def _client_id_from(params: Dict[str, Any]) -> Union[int, str]:
@@ -306,21 +223,108 @@ class Invoices(Actions):
             )
         return validate_id(raw)
 
-    def _unverified_error(self, key: str, client_id: Union[int, str], payload: Dict[str, Any],
-                          attempts: int, cause: AlegraAPIError,
-                          details_source: Optional[AlegraAPIError] = None) -> AlegraUnverifiedCreateError:
-        """Build the quarantine error carrying the last ambiguous error's HTTP details."""
-        details = details_source if details_source is not None else cause
-        return AlegraUnverifiedCreateError(
-            f"Invoice creation unverified for dedup key {key!r}",
+    def annul(self, id: Union[int, str], cause: str, *, dedup_key: Optional[str] = None,
+              operation_type: Any = None, number_template_id: Any = None,
+              stamp: bool = True, on_unverified: str = "retry",
+              verify_window: float = 30.0) -> Dict[str, Any]:
+        """Annul a stamped electronic invoice with a credit note.
+
+        Builds and posts a ``VOID_ELECTRONIC_INVOICE`` credit note referencing the
+        invoice, with double-creation protection (same invoice -> same note). Only
+        invoices with status ``open`` and an accepted stamp can be annulled; use
+        :meth:`void` for non-electronic documents.
+
+        Args:
+            id (int or str): Invoice ID.
+            cause (str): Reason for the annulment; must not be blank.
+            dedup_key (str, optional): Override the default ``annul:<id>`` key.
+            operation_type (CreditNoteOperationType or str, optional): Defaults to
+                ``REFERENCE_TO_ELECTRONIC_INVOICE``. Use
+                ``NO_REFERENCE_TO_ELECTRONIC_INVOICE`` when the customer already
+                accepted the invoice.
+            number_template_id (int or str, optional): Number template for the note.
+            stamp (bool): Request electronic stamping (default True).
+            on_unverified (str): ``"retry"`` (default) or ``"raise"``.
+            verify_window (float): Seconds to look for the note after an ambiguous
+                failure (default 30).
+
+        Returns:
+            dict: The created (or previously existing) credit note.
+
+        Raises:
+            ValueError: If the cause is blank, the invoice is not open or not stamped,
+                the invoice has no client id, or the options are invalid.
+            AlegraStampError: The note was created but stamping failed (400 with the
+                created document, available as ``.document``).
+            AlegraAPIError: Any other API failure.
+            AlegraUnverifiedCreateError: When the create cannot be verified.
+        """
+        if not isinstance(cause, str) or not cause.strip():
+            raise ValueError("cause must not be blank")
+
+        invoice = self.read(id)
+        if not isinstance(invoice, dict):
+            raise ValueError("Unexpected invoice response")
+        if invoice.get("status") != "open":
+            raise ValueError("Only open invoices can be annulled")
+
+        stamp_data = invoice.get("stamp")
+        legal_status = stamp_data.get("legalStatus") if isinstance(stamp_data, dict) else None
+        if not isinstance(legal_status, str) or not legal_status.startswith("STAMPED_AND_ACCEPTED"):
+            raise ValueError(
+                "Only stamped and accepted electronic invoices can be annulled; "
+                "use void() for non-electronic documents"
+            )
+
+        client = invoice.get("client")
+        raw_client_id = client.get("id") if isinstance(client, dict) else client
+        if raw_client_id is None:
+            raise ValueError("Invoice has no client id")
+        client_id = validate_id(raw_client_id)
+        invoice_id = validate_id(invoice.get("id") or id)
+
+        if dedup_key is None:
+            key = make_dedup_key("annul", id)
+        else:
+            key = validate_dedup_key(dedup_key)
+
+        payload = payload_with_marker(
+            self._annulment_payload(invoice, invoice_id, client_id, cause,
+                                    operation_type, number_template_id, stamp),
+            key,
+        )
+        credit_notes = self.client.credit_notes
+
+        def lookup() -> Optional[Dict[str, Any]]:
+            return credit_notes.reconcile(key, client_id, lookup_pages=2)
+
+        def post(data: Dict[str, Any]) -> Any:
+            try:
+                return credit_notes.create(data)
+            except AlegraAPIError as error:
+                document = _stamp_failure_document(error)
+                if document is not None:
+                    raise AlegraStampError(
+                        "Credit note created but electronic stamping failed",
+                        document=document,
+                        status_code=error.status_code,
+                        response_body=error.response_body,
+                        retry_after=error.retry_after,
+                    ) from error
+                raise
+
+        return run_create_once(
+            post=post,
+            lookup=lookup,
+            payload=payload,
             dedup_key=key,
             client_id=client_id,
-            resource=self.endpoint,
-            payload=payload,
-            attempts=attempts,
-            status_code=details.status_code,
-            response_body=details.response_body,
-            retry_after=details.retry_after,
+            resource="credit-notes",
+            on_unverified=on_unverified,
+            verify_window=verify_window,
+            lookup_pages=2,
+            precheck=True,
+            log_path="/credit-notes",
         )
 
     def get_pdf(self, id: Union[int, str], max_bytes: int = _DEFAULT_MAX_BYTES,
@@ -576,6 +580,56 @@ class Invoices(Actions):
                 pass
         return target
 
+    @staticmethod
+    def _annulment_payload(invoice: Dict[str, Any], invoice_id: Union[int, str],
+                           client_id: Union[int, str], cause: str,
+                           operation_type: Any, number_template_id: Any,
+                           stamp: bool) -> Dict[str, Any]:
+        """Build the credit-note payload from the invoice record."""
+        items = []
+        for item in invoice.get("items") or []:
+            entry = {
+                "id": validate_id(item.get("id")),
+                "price": item.get("price"),
+                "quantity": item.get("quantity"),
+            }
+            if item.get("tax") is not None:
+                tax = item["tax"]
+                if isinstance(tax, (list, tuple)):
+                    entry["tax"] = [
+                        validate_id(element.get("id") if isinstance(element, dict) else element)
+                        for element in tax
+                    ]
+                else:
+                    entry["tax"] = [
+                        validate_id(tax.get("id") if isinstance(tax, dict) else tax)
+                    ]
+            for field in ("reference", "description"):
+                if field in item:
+                    entry[field] = item[field]
+            items.append(entry)
+
+        payload: Dict[str, Any] = {
+            "date": date.today().isoformat(),
+            "client": {"id": client_id},
+            "items": items,
+            "type": CreditNoteType.VOID_ELECTRONIC_INVOICE.value,
+            "creditNoteOperationType": _enum_value(
+                operation_type if operation_type is not None
+                else CreditNoteOperationType.REFERENCE_TO_ELECTRONIC_INVOICE
+            ),
+            "cause": cause.strip(),
+            "invoices": [{"id": invoice_id, "amount": invoice.get("total")}],
+        }
+        for field in ("warehouse", "costCenter"):
+            if invoice.get(field) is not None:
+                payload[field] = copy.deepcopy(invoice[field])
+        if number_template_id is not None:
+            payload["numberTemplate"] = {"id": validate_id(number_template_id)}
+        if stamp:
+            payload["stamp"] = {"generateStamp": True}
+        return payload
+
     def send_email(self, id: Union[int, str], emails: Union[List[str], str], send_copy_to_user: bool = False,
                    subject: Optional[str] = None, message: Optional[str] = None) -> Any:
         """Send invoice by email.
@@ -602,11 +656,15 @@ class Invoices(Actions):
             data["emailTemplate"] = {"subject": subject or "", "message": message or ""}
         return self.client.query('post', endpoint, data=data)
 
-    def void(self, id: Union[int, str]) -> Any:
-        """Void / Annul an invoice by ID.
+    def void(self, id: Union[int, str], cause: Optional[str] = None) -> Any:
+        """Void a non-electronic invoice by ID.
+
+        For Colombian electronic invoices use :meth:`annul`: they are cancelled with a
+        credit note, not voided. ``cause`` is optional and sent only when provided.
 
         Args:
             id (int or str): Invoice ID.
+            cause (str, optional): Reason for voiding.
 
         Returns:
             Any: Parsed JSON response from the server.
@@ -615,7 +673,9 @@ class Invoices(Actions):
             ValueError: If the ID is not a valid resource identifier.
         """
         endpoint = self._resource_url(id, "void")
-        return self.client.query('post', endpoint)
+        if cause is None:
+            return self.client.query('post', endpoint)
+        return self.client.query('post', endpoint, data={"cause": cause})
 
     def open(self, id: Union[int, str]) -> Any:
         """Open / Reopen a void invoice by ID.

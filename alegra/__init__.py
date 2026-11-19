@@ -1,6 +1,8 @@
 from alegra.session import AlegraClient, AlegraAPIError, session
 from alegra.retry import RetryPolicy
 from alegra.dedup import make_dedup_key, make_dedup_key_from
+from alegra.credit_notes import (CreditNotes, credit_notes, CreditNoteType,
+                                 CreditNoteOperationType)
 from alegra.exceptions import (
     AlegraAuthError,
     AlegraNotFoundError,
@@ -10,6 +12,7 @@ from alegra.exceptions import (
     AlegraConnectionError,
     AlegraTimeoutError,
     AlegraFileNotAvailableError,
+    AlegraStampError,
     AlegraUnverifiedCreateError,
 )
 from alegra.actions import Actions, actions
@@ -36,10 +39,15 @@ __all__ = [
     'AlegraConnectionError',
     'AlegraTimeoutError',
     'AlegraFileNotAvailableError',
+    'AlegraStampError',
     'AlegraUnverifiedCreateError',
     'RetryPolicy',
     'make_dedup_key',
     'make_dedup_key_from',
+    'CreditNotes',
+    'credit_notes',
+    'CreditNoteType',
+    'CreditNoteOperationType',
     'session',
     'Actions',
     'actions',

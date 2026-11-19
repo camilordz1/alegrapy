@@ -22,4 +22,6 @@ Jerarquía de errores de la librería. Todas las clases heredan de `AlegraAPIErr
 
 ::: alegra.exceptions.AlegraFileNotAvailableError
 
+::: alegra.exceptions.AlegraStampError
+
 ::: alegra.exceptions.AlegraUnverifiedCreateError

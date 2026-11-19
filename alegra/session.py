@@ -138,6 +138,14 @@ class AlegraClient:
         return self._invoices
 
     @property
+    def credit_notes(self) -> 'CreditNotes':
+        """Access Credit Notes resource operations."""
+        if not hasattr(self, '_credit_notes'):
+            from alegra.credit_notes import CreditNotes
+            self._credit_notes = CreditNotes(self)
+        return self._credit_notes
+
+    @property
     def payments(self) -> 'Payments':
         """Access Payments resource operations."""
         if not hasattr(self, '_payments'):

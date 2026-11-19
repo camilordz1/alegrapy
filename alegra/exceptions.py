@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import copy
 import math
-from typing import Any, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import requests
 import urllib3
@@ -91,6 +91,20 @@ class AlegraFileNotAvailableError(AlegraAPIError):
     Alegra does not generate a PDF for draft invoices; the XML is only available once
     the invoice is stamped.
     """
+
+
+class AlegraStampError(AlegraAPIError):
+    """The credit note was created but its electronic stamping failed.
+
+    Alegra returns HTTP 400 with the created document; it is available as
+    ``document`` so the caller can retry stamping instead of creating another note.
+    """
+    def __init__(self, message: str, *, document: Dict[str, Any],
+                 status_code: Optional[int] = None, response_body: Optional[str] = None,
+                 retry_after: Optional[float] = None) -> None:
+        super().__init__(message, status_code=status_code, response_body=response_body,
+                         retry_after=retry_after)
+        self.document = copy.deepcopy(document)
 
 
 class AlegraUnverifiedCreateError(AlegraAPIError):
