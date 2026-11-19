@@ -112,6 +112,13 @@ class TestMakeDedupKeyFrom(unittest.TestCase):
                 self.assertNotEqual(make_dedup_key_from({"v": number}, ["v"]),
                                     make_dedup_key_from({"v": text}, ["v"]))
 
+    def test_long_numbers_are_not_rounded_together(self):
+        first = 10 ** 30 + 1
+        second = 10 ** 30 + 2
+        self.assertNotEqual(make_dedup_key_from({"v": first}, ["v"]),
+                            make_dedup_key_from({"v": second}, ["v"]))
+        self.assertNotEqual(make_dedup_key("order", first), make_dedup_key("order", second))
+
     def test_malformed_projection_path_is_rejected(self):
         payload = {"items": [{"id": 1}]}
         for path in ("items[]id", "items[]x.id"):

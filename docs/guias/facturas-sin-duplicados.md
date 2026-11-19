@@ -82,10 +82,24 @@ if factura is not None:
 else:
     # Pasado el periodo de cuarentena, la precheck protege el reintento:
     # si la factura aparece mientras tanto, create_once la devuelve.
+    # Reconstruye los datos desde tu sistema (el pedido original), no desde
+    # entrada["payload"]: ese payload ya pasó por to_dict() (los Decimal son texto).
+    datos = construir_datos_de_factura(entrada["dedup_key"])
     factura = client.invoices.create_once(
-        entrada["payload"], entrada["dedup_key"], precheck=True)
+        datos, entrada["dedup_key"], precheck=True, lookup_pages=10)
     marcar_como_creada(factura)
 ```
+
+Dos cuidados en el worker:
+
+- **Reconstruye el payload desde tu fuente de datos.** `err.to_dict()["payload"]` sirve para
+  registrar y diagnosticar, pero sus valores ya están convertidos a tipos JSON (`Decimal` como
+  texto, tuplas como listas), así que el POST no sería idéntico al original. La marca de
+  deduplicación sale de la misma `dedup_key`, por lo que no hace falta reutilizar ese payload.
+- **Amplía `lookup_pages` según la antigüedad de la cuarentena.** La búsqueda revisa solo las
+  `lookup_pages × 30` facturas más recientes del cliente. Si entre el error y el reintento ese
+  cliente recibió más facturas, la original puede quedar fuera de la ventana y crearse un
+  duplicado.
 
 Este patrón funciona con una tabla de base de datos, Celery, RQ, un cron o cualquier otra cola:
 el SDK no crea hilos, workers ni colas.

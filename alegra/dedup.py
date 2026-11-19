@@ -4,7 +4,7 @@ import json
 import math
 import re
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 from typing import Any, Mapping, Sequence
 
 _READABLE_PART = re.compile(r"[A-Za-z0-9_.-]+")
@@ -45,7 +45,11 @@ def _number_text(value: Any) -> str:
         return str(value)
     if number == 0:
         number = Decimal("0")
-    return format(number.normalize(), "f")
+    # normalize() rounds to the context precision (28 digits by default); size the context
+    # to the number so long identifiers never collapse into the same text
+    with localcontext() as context:
+        context.prec = max(context.prec, len(number.as_tuple().digits))
+        return format(number.normalize(), "f")
 
 
 def _canonical_json(value: Any) -> str:
