@@ -53,6 +53,9 @@ Los ejemplos siguientes usan un cliente abierto. Créalo sin `with` (y llama a `
 al terminar) o escribe el código dentro del bloque `with` del inicio rápido:
 
 ```python
+import os
+from alegra import AlegraClient
+
 client = AlegraClient(user=os.environ["ALEGRA_USER"], token=os.environ["ALEGRA_TOKEN"])
 ```
 
