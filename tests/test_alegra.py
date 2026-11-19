@@ -1686,6 +1686,169 @@ class TestIterAll(unittest.TestCase):
         mock_query.assert_called_once()
 
 
+class TestSearchHelpers(unittest.TestCase):
+    """Exact-match helpers narrow on the server but filter client-side."""
+
+    @staticmethod
+    def _client(pages):
+        client = AlegraClient(user="user", token="token")
+        query = MagicMock(side_effect=pages)
+        client.query = query
+        return client, query
+
+    def test_contacts_find_exact_among_contains_matches(self):
+        client, query = self._client([[
+            {"id": 1, "identification": "900559088"},
+            {"id": 2, "identification": "9005590881"},
+        ]])
+
+        result = client.contacts.find_by_identification("900559088")
+
+        self.assertEqual([record["id"] for record in result], [1])
+        params = query.call_args.kwargs['params']
+        self.assertEqual(params['identification'], "900559088")
+        self.assertEqual((params['start'], params['limit']), (0, 30))
+
+    def test_contacts_find_match_on_a_later_page(self):
+        first_page = [{"id": index, "identification": f"OTHER-{index}"} for index in range(30)]
+        second_page = [{"id": 31, "identification": "222222222222"}]
+        client, query = self._client([first_page, second_page])
+
+        result = client.contacts.find_by_identification("222222222222")
+
+        self.assertEqual([record["id"] for record in result], [31])
+        self.assertEqual(query.call_count, 2)
+        self.assertEqual(query.call_args_list[1].kwargs['params']['start'], 30)
+
+    def test_contacts_duplicates_are_all_returned(self):
+        client, _ = self._client([[
+            {"id": 126, "identification": "222222222222"},
+            {"id": 1008, "identification": "222222222222"},
+        ]])
+
+        result = client.contacts.find_by_identification("222222222222")
+
+        self.assertEqual([record["id"] for record in result], [126, 1008])
+
+    def test_contacts_normalization_ignores_dots_and_spaces_only(self):
+        records = [
+            {"id": 1, "identification": "900.559.088"},
+            {"id": 2, "identification": "900 559 088"},
+            {"id": 3, "identification": "900559088-2"},
+        ]
+        cases = [
+            ("900559088", [1, 2]),
+            ("  900.559.088  ", [1, 2]),
+            ("900559088-2", [3]),
+        ]
+        for needle, expected in cases:
+            with self.subTest(needle=needle):
+                client, _ = self._client([records])
+                result = client.contacts.find_by_identification(needle)
+                self.assertEqual([record["id"] for record in result], expected)
+
+    def test_contacts_reads_identification_object_number(self):
+        client, _ = self._client([[
+            {"id": 5, "identificationObject": {"number": "123"}},
+        ]])
+
+        result = client.contacts.find_by_identification("123")
+
+        self.assertEqual([record["id"] for record in result], [5])
+
+    def test_contacts_blank_identification_raises(self):
+        for needle in ("", "   ", None):
+            with self.subTest(needle=needle):
+                client, query = self._client([])
+                with self.assertRaises(ValueError):
+                    client.contacts.find_by_identification(needle)
+                query.assert_not_called()
+
+    def test_contacts_filters_are_forwarded(self):
+        client, query = self._client([[
+            {"id": 9, "identification": "900"},
+        ]])
+
+        client.contacts.find_by_identification("900", status="active")
+
+        params = query.call_args.kwargs['params']
+        self.assertEqual(params['status'], "active")
+        self.assertEqual(params['identification'], "900")
+
+    def test_items_find_exact_among_contains_matches(self):
+        client, query = self._client([[
+            {"id": 1, "reference": "TP-152"},
+            {"id": 2, "reference": "TP-15210"},
+            {"id": 3, "reference": "TP-15210-B"},
+        ]])
+
+        result = client.items.find_by_reference("TP-15210")
+
+        self.assertEqual([record["id"] for record in result], [2])
+        params = query.call_args.kwargs['params']
+        self.assertEqual(params['reference'], "TP-15210")
+
+    def test_items_reference_comparison_is_case_sensitive_after_strip(self):
+        records = [
+            {"id": 1, "reference": "TP-15210"},
+            {"id": 2, "reference": "tp-15210"},
+            {"id": 3, "reference": "  TP-100  "},
+        ]
+        cases = [
+            ("TP-15210", [1]),
+            ("tp-15210", [2]),
+            ("TP-100", [3]),
+        ]
+        for needle, expected in cases:
+            with self.subTest(needle=needle):
+                client, _ = self._client([records])
+                result = client.items.find_by_reference(needle)
+                self.assertEqual([record["id"] for record in result], expected)
+
+    def test_items_reads_nested_reference_object(self):
+        client, _ = self._client([[
+            {"id": 7, "reference": {"type": "standard", "reference": "SKU-1"}},
+        ]])
+
+        result = client.items.find_by_reference("SKU-1")
+
+        self.assertEqual([record["id"] for record in result], [7])
+
+    def test_items_blank_reference_raises(self):
+        for needle in ("", "   ", None):
+            with self.subTest(needle=needle):
+                client, query = self._client([])
+                with self.assertRaises(ValueError):
+                    client.items.find_by_reference(needle)
+                query.assert_not_called()
+
+    def test_items_filters_are_forwarded(self):
+        client, query = self._client([[
+            {"id": 9, "reference": "SKU"},
+        ]])
+
+        client.items.find_by_reference("SKU", status="active")
+
+        params = query.call_args.kwargs['params']
+        self.assertEqual(params['status'], "active")
+        self.assertEqual(params['reference'], "SKU")
+
+    def test_helpers_are_reachable_from_legacy_modules(self):
+        default_client = sys.modules['alegra.session'].default_client
+
+        with patch.object(default_client, 'query',
+                          return_value=[{"id": 1, "identification": "1"}]) as mock_query:
+            found = contacts().find_by_identification("1")
+        self.assertEqual([record["id"] for record in found], [1])
+        mock_query.assert_called_once()
+
+        with patch.object(default_client, 'query',
+                          return_value=[{"id": 2, "reference": "SKU"}]) as mock_query:
+            found = items().find_by_reference("SKU")
+        self.assertEqual([record["id"] for record in found], [2])
+        mock_query.assert_called_once()
+
+
 if __name__ == '__main__':
     unittest.main()
 

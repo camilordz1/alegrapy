@@ -5,9 +5,9 @@ Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones 
 | Recurso | Propiedad | Endpoint | Métodos extra |
 |---|---|---|---|
 | Facturas de venta | `client.invoices` | `invoices` | `void(id)`, `open(id)`, `send_email(id, emails, ...)` |
-| Contactos (clientes y proveedores) | `client.contacts` | `contacts` | ninguno |
+| Contactos (clientes y proveedores) | `client.contacts` | `contacts` | `find_by_identification(identification)` |
 | Pagos / ingresos | `client.payments` | `payments` | `void(id)`, `open(id)` |
-| Ítems (productos y servicios) | `client.items` | `items` | ninguno |
+| Ítems (productos y servicios) | `client.items` | `items` | `find_by_reference(reference)` |
 | Cotizaciones | `client.estimates` | `estimates` | `void(id)`, `open(id)`, `send_email(id, emails, ...)` |
 | Órdenes de compra | `client.purchase_orders` | `purchase-orders` | `void(id)`, `send_email(id, emails, ...)`, `add_comment(id, comment_text)` |
 | Cuentas bancarias | `client.bank_accounts` | `bank-accounts` | `transfer(from_id, to_id, amount, date, description)` |

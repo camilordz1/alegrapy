@@ -55,6 +55,7 @@ nav:
       - Guía rápida: guias/guia-rapida.md
       - Recursos: guias/recursos.md
       - Paginación: guias/paginacion.md
+      - Búsquedas exactas: guias/busquedas.md
       - Errores: guias/errores.md
       - Reintentos: guias/reintentos.md
       - Concurrencia: guias/concurrencia.md
