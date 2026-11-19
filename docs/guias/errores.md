@@ -11,6 +11,7 @@ subclases. El tipo base conserva estos atributos:
 | `status_code` | Código HTTP devuelto por la API, o `None` si no hubo respuesta. |
 | `response_body` | Texto crudo de la respuesta, o `None` si no hubo respuesta. |
 | `retry_after` | Segundos sugeridos por la cabecera `Retry-After`, o `None` si no está o no se puede interpretar. Nunca es negativo. |
+| `request_not_sent` | `True` solo cuando es seguro que la petición no llegó a Alegra (timeout de conexión, conexión rechazada o DNS fallido). En cualquier otro error vale `False`. |
 
 Se considera error cualquier respuesta que no sea 2xx.
 
@@ -77,6 +78,20 @@ except AlegraTimeoutError as e:
     print("Sin respuesta a tiempo:", type(e.__cause__).__name__)
 ```
 
+`AlegraConnectionError` no garantiza que la petición no se haya enviado: la conexión pudo cortarse
+después de que Alegra procesara un `POST`. Pregunta siempre por `request_not_sent` antes de
+reintentar una creación:
+
+```python
+except AlegraConnectionError as e:
+    if e.request_not_sent:
+        # Seguro: la petición no salió del cliente
+        reintentar_creacion()
+    else:
+        # Pudo haberse creado: consulta el recurso antes de repetir
+        registrar_para_revision()
+```
+
 El mensaje solo incluye el nombre de la clase del error (por ejemplo
 `HTTP request failed (ConnectTimeout)`), nunca la URL ni los parámetros, que podrían contener
 datos sensibles.
@@ -86,8 +101,9 @@ Si la política de [reintentos](reintentos.md) está activa, la excepción que r
 envuelven un `POST` ambiguo ni cambian el tipo de error.
 
 !!! warning
-    Un timeout en un `POST` es ambiguo: el registro pudo haberse creado. Consulta
-    [Seguridad](seguridad.md) antes de reintentar.
+    Un timeout en un `POST` es ambiguo: el registro pudo haberse creado. No repitas la creación
+    a menos que `e.request_not_sent` sea `True`. Consulta [Seguridad](seguridad.md) antes de
+    reintentar.
 
 ## Errores de programación
 

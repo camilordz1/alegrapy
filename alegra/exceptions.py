@@ -5,9 +5,11 @@ Every exception in this module subclasses :class:`AlegraAPIError`, so existing
 """
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+import math
 from typing import Any, Mapping, Optional
 
 import requests
+import urllib3
 
 
 class AlegraAPIError(Exception):
@@ -27,6 +29,16 @@ class AlegraAPIError(Exception):
         self.status_code = status_code
         self.response_body = response_body
         self.retry_after = retry_after
+
+    @property
+    def request_not_sent(self) -> bool:
+        """Whether the request provably never reached Alegra.
+
+        ``True`` only for a connect timeout or a refused/unresolvable connection.
+        ``False`` when the request may have been processed, including every HTTP error
+        response. Use it before re-creating non-idempotent records (invoices, payments).
+        """
+        return _was_not_sent(self.__cause__)
 
 
 class AlegraAuthError(AlegraAPIError):
@@ -53,12 +65,12 @@ class AlegraServerError(AlegraAPIError):
 
 
 class AlegraConnectionError(AlegraAPIError):
-    """The request never reached Alegra (connection or connect-timeout error).
+    """The connection failed or broke before a complete response was received.
 
-    ``requests.ConnectTimeout`` is reported here rather than as a timeout because it
-    means the connection could not be established, so the request was provably not
-    sent. Retries and other recovery logic may treat it as safe for non-idempotent
-    requests, unlike :class:`AlegraTimeoutError`.
+    This is ambiguous: the request MAY have reached Alegra and been processed, unless
+    ``request_not_sent`` is ``True`` (connect timeout, connection refused or an
+    unresolvable host). Do not re-create invoices or payments based on this class alone;
+    check ``request_not_sent`` first.
     """
 
 
@@ -96,9 +108,13 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
 
     text = value.strip()
     try:
-        return max(0.0, float(text))
+        seconds = float(text)
     except (TypeError, ValueError):
         pass
+    else:
+        if not math.isfinite(seconds):
+            return None
+        return max(0.0, seconds)
 
     try:
         target = parsedate_to_datetime(text)
@@ -128,9 +144,42 @@ def _parse_reset_seconds(value: Optional[str]) -> Optional[float]:
         seconds = float(str(value).strip())
     except (TypeError, ValueError):
         return None
-    if seconds < 0:
+    if not math.isfinite(seconds) or seconds < 0:
         return None
     return seconds
+
+
+def _was_not_sent(exc: Optional[BaseException]) -> bool:
+    """Tell whether a transport error proves the request never reached Alegra.
+
+    Only two cases are safe:
+
+    - ``requests.ConnectTimeout``: the connection could not be established.
+    - A ``requests.ConnectionError`` wrapping a ``urllib3.MaxRetryError`` whose reason is
+      a ``urllib3.NewConnectionError`` (DNS failure, connection refused): the connection
+      was never opened.
+
+    Other connection errors (for example one wrapping ``ProtocolError`` or
+    ``RemoteDisconnected``) can happen after the request was sent, so they are not safe
+    for non-idempotent methods.
+
+    Args:
+        exc (BaseException, optional): Original exception raised by ``requests``.
+
+    Returns:
+        bool: ``True`` only when the request provably was not sent.
+    """
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return True
+    if not isinstance(exc, requests.exceptions.ConnectionError):
+        return False
+
+    cause = exc.args[0] if exc.args else None
+    if not isinstance(cause, urllib3.exceptions.MaxRetryError):
+        return False
+    # NewConnectionError subclasses ConnectTimeoutError in urllib3 1.26 and 2.x; a
+    # connect timeout wrapped in MaxRetryError therefore lands here too.
+    return isinstance(cause.reason, urllib3.exceptions.NewConnectionError)
 
 
 def _error_for_status(message: str, status_code: int, response_body: Optional[str],

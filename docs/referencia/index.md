@@ -4,7 +4,9 @@ Esta sección se genera automáticamente a partir de los docstrings del código 
 
 | Página | Contenido |
 |---|---|
-| [Cliente y errores](session.md) | `AlegraClient`, `AlegraAPIError` y la clase legacy `session` |
+| [Cliente y errores](session.md) | `AlegraClient` y la clase legacy `session` |
+| [Excepciones](exceptions.md) | Jerarquía de errores tipados |
+| [Reintentos](retry.md) | `RetryPolicy` |
 | [Actions](actions.md) | Clase base `Actions` (operaciones estándar) y `validate_id` |
 | [Facturas](invoices.md) | `Invoices` |
 | [Contactos](contacts.md) | `Contacts` |

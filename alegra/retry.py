@@ -4,6 +4,7 @@ Retries are deliberately implemented here instead of through ``urllib3.Retry`` /
 ``HTTPAdapter``: non-idempotent requests are only retried when the request provably
 never reached Alegra, which requires inspecting the original exception.
 """
+import math
 import numbers
 import random
 import time
@@ -11,10 +12,9 @@ from dataclasses import dataclass
 from typing import Any, FrozenSet, Optional
 
 import requests
-import urllib3
 
-from alegra.exceptions import (AlegraAPIError, AlegraConnectionError, AlegraRateLimitError,
-                               AlegraTimeoutError)
+from alegra.exceptions import (AlegraAPIError, AlegraConnectionError, AlegraTimeoutError,
+                               _was_not_sent)
 
 # Methods whose repetition cannot create a second record on Alegra's side.
 IDEMPOTENT_METHODS: FrozenSet[str] = frozenset({"GET", "PUT", "DELETE", "HEAD", "OPTIONS"})
@@ -63,8 +63,8 @@ class RetryPolicy:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, numbers.Real):
                 raise ValueError(f"{name} must be a number")
-            if value < 0:
-                raise ValueError(f"{name} must be non-negative")
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be a finite, non-negative number")
 
         try:
             statuses = list(self.retry_statuses)
@@ -73,38 +73,6 @@ class RetryPolicy:
         for status in statuses:
             if isinstance(status, bool) or not isinstance(status, int) or not 100 <= status <= 599:
                 raise ValueError(f"retry_statuses contains an invalid status code: {status!r}")
-
-
-def _was_not_sent(exc: BaseException) -> bool:
-    """Tell whether a transport error proves the request never reached Alegra.
-
-    Only two cases are safe:
-
-    - ``requests.ConnectTimeout``: the connection could not be established.
-    - A ``requests.ConnectionError`` wrapping a ``urllib3.MaxRetryError`` whose reason is
-      a ``urllib3.NewConnectionError`` (DNS failure, connection refused): the connection
-      was never opened.
-
-    Other connection errors (for example one wrapping ``ProtocolError`` or
-    ``RemoteDisconnected``) can happen after the request was sent, so they are not safe
-    to retry for non-idempotent methods.
-
-    Args:
-        exc (BaseException): Original exception raised by ``requests``.
-
-    Returns:
-        bool: ``True`` only when the request provably was not sent.
-    """
-    if isinstance(exc, requests.exceptions.ConnectTimeout):
-        return True
-    if not isinstance(exc, requests.exceptions.ConnectionError):
-        return False
-
-    cause = exc.args[0] if exc.args else None
-    if not isinstance(cause, urllib3.exceptions.MaxRetryError):
-        return False
-    # urllib3 2.x ConnectTimeoutError subclasses NewConnectionError, so both versions match
-    return isinstance(cause.reason, urllib3.exceptions.NewConnectionError)
 
 
 def _should_retry(policy: RetryPolicy, method: str, files: Any, error: AlegraAPIError) -> bool:
@@ -132,10 +100,9 @@ def _should_retry(policy: RetryPolicy, method: str, files: Any, error: AlegraAPI
         return error.status_code in policy.retry_statuses
 
     # Non-idempotent (POST, PATCH, unknown): a retry may create a duplicate invoice.
-    if isinstance(error, AlegraRateLimitError):
-        return True
-    cause = error.__cause__
-    return cause is not None and _was_not_sent(cause)
+    if error.status_code is not None:
+        return error.status_code == 429 and 429 in policy.retry_statuses
+    return error.request_not_sent
 
 
 def _retry_delay(policy: RetryPolicy, error: AlegraAPIError, attempt: int) -> Optional[float]:

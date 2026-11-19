@@ -28,9 +28,34 @@ DIAN duplicada.
 Por eso un `POST` solo se repite cuando es seguro que nada llegó al servidor, o cuando Alegra
 explícitamente pidió esperar (`429`).
 
+`AlegraConnectionError` también es ambiguo: la conexión pudo cortarse después de que Alegra
+procesara la petición. Usa `err.request_not_sent` para saber si es seguro repetir:
+
+```python
+except AlegraConnectionError as e:
+    if e.request_not_sent:
+        crear_de_nuevo()
+    else:
+        consultar_antes_de_crear()
+```
+
 !!! danger
     Nunca reintentes a mano un `POST` de facturas o pagos tras un `AlegraTimeoutError` o un
     `AlegraServerError`. Consulta el recurso antes de volver a crearlo.
+
+## DELETE y el 404 en un reintento
+
+`DELETE` es idempotente, pero un reintento puede recibir `404` porque el primer intento ya borró
+el registro antes de fallar (por ejemplo, un timeout después de que Alegra procesó el borrado).
+
+- `404` en el **primer** intento: se lanza `AlegraNotFoundError`, como siempre.
+- `404` en un **reintento** (tras un timeout, error de conexión o `5xx`): se considera éxito, se
+  devuelve `{}` y se registra un `WARNING` (“DELETE returned 404 on retry; treating as already
+  deleted”).
+- `404` en un `GET`, `PUT` o `POST` reintentado sigue lanzando `AlegraNotFoundError`.
+
+El estado `429` se controla con `retry_statuses` para todos los métodos: si lo quitas de la
+política, ningún método reintenta un `429`.
 
 ## Cuánto se espera
 

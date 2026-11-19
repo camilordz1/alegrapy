@@ -853,6 +853,41 @@ class TestTypedExceptions(unittest.TestCase):
 
         self.assertIsNone(error.retry_after)
 
+    def test_retry_after_non_finite_is_none(self):
+        for value in ("nan", "inf", "-inf"):
+            with self.subTest(value=value):
+                error = self._error_for_response(self._response(429, {"Retry-After": value}))
+                self.assertIsNone(error.retry_after)
+
+    def test_x_rate_limit_reset_is_used_for_429(self):
+        error = self._error_for_response(self._response(429, {"X-Rate-Limit-Reset": "12"}))
+
+        self.assertEqual(error.retry_after, 12.0)
+
+    def test_x_rate_limit_reset_is_ignored_on_non_429(self):
+        error = self._error_for_response(self._response(503, {"X-Rate-Limit-Reset": "12"}))
+
+        self.assertIsNone(error.retry_after)
+
+    def test_request_not_sent_property(self):
+        import urllib3
+        from http.client import RemoteDisconnected
+        from requests.exceptions import ConnectTimeout, ConnectionError as RequestsConnectionError
+        from requests.exceptions import ReadTimeout
+
+        refused = urllib3.exceptions.MaxRetryError(
+            None, "/", reason=urllib3.exceptions.NewConnectionError(None, "refused")
+        )
+
+        self.assertTrue(self._error_for_transport(ConnectTimeout("connect timed out")).request_not_sent)
+        self.assertTrue(self._error_for_transport(RequestsConnectionError(refused)).request_not_sent)
+        self.assertFalse(self._error_for_transport(RequestsConnectionError(
+            urllib3.exceptions.ProtocolError("Connection aborted."))).request_not_sent)
+        self.assertFalse(self._error_for_transport(RequestsConnectionError(
+            RemoteDisconnected("Remote end closed connection"))).request_not_sent)
+        self.assertFalse(self._error_for_transport(ReadTimeout("read timed out")).request_not_sent)
+        self.assertFalse(self._error_for_response(self._response(404)).request_not_sent)
+
     @patch('requests.Session.request')
     def test_legacy_path_raises_typed_errors(self, mock_request):
         from alegra import AlegraNotFoundError
@@ -1257,6 +1292,88 @@ class TestRetries(unittest.TestCase):
         self.assertFalse(_was_not_sent(SSLError("bad certificate")))
         self.assertFalse(_was_not_sent(ValueError("not a request error")))
 
+    def test_delete_404_on_retry_is_treated_as_already_deleted(self):
+        from requests.exceptions import ReadTimeout
+
+        sequences = [
+            ("timeout", [ReadTimeout("slow"), self._response(404)]),
+            ("503", [self._response(503), self._response(404)]),
+        ]
+        for label, responses in sequences:
+            with self.subTest(first=label):
+                with patch('requests.Session.request') as mock_request:
+                    mock_request.side_effect = responses
+                    with patch('alegra.retry.time.sleep'):
+                        result = self._client().query("delete", self.URL + "/1")
+
+                self.assertEqual(result, {})
+                self.assertEqual(mock_request.call_count, 2)
+
+    def test_delete_first_attempt_404_still_raises(self):
+        with patch('requests.Session.request') as mock_request:
+            mock_request.return_value = self._response(404)
+            with patch('alegra.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegra.AlegraNotFoundError):
+                    self._client().query("delete", self.URL + "/1")
+
+        self.assertEqual(mock_request.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    def test_get_404_on_retry_still_raises(self):
+        from requests.exceptions import ReadTimeout
+
+        with patch('requests.Session.request') as mock_request:
+            mock_request.side_effect = [ReadTimeout("slow"), self._response(404)]
+            with patch('alegra.retry.time.sleep'):
+                with self.assertRaises(alegra.AlegraNotFoundError):
+                    self._get(self._client())
+
+        self.assertEqual(mock_request.call_count, 2)
+
+    def test_post_429_respects_retry_statuses(self):
+        policy = self._policy(retry_statuses=frozenset({502, 503, 504}))
+        with patch('requests.Session.request') as mock_request:
+            mock_request.side_effect = [
+                self._response(429, headers={"Retry-After": "1"}),
+                self._response(201, '{"id": 2}'),
+            ]
+            with patch('alegra.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegra.AlegraRateLimitError):
+                    self._post(self._client(retry=policy))
+
+        self.assertEqual(mock_request.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    def test_get_429_respects_retry_statuses(self):
+        policy = self._policy(retry_statuses=frozenset({502, 503, 504}))
+        with patch('requests.Session.request') as mock_request:
+            mock_request.side_effect = [
+                self._response(429, headers={"Retry-After": "1"}),
+                self._response(200, '{"id": 1}'),
+            ]
+            with patch('alegra.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegra.AlegraRateLimitError):
+                    self._get(self._client(retry=policy))
+
+        self.assertEqual(mock_request.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    def test_invalid_x_rate_limit_reset_falls_back_to_backoff(self):
+        for header in ("-5", "abc", "nan", "inf"):
+            with self.subTest(header=header):
+                with patch('requests.Session.request') as mock_request:
+                    mock_request.side_effect = [
+                        self._response(429, headers={"X-Rate-Limit-Reset": header}),
+                        self._response(200, '{"id": 1}'),
+                    ]
+                    with patch('alegra.retry.random.uniform', return_value=0.25) as mock_uniform:
+                        with patch('alegra.retry.time.sleep') as mock_sleep:
+                            result = self._get(self._client())
+
+                self.assertEqual(result, {"id": 1})
+                mock_uniform.assert_called_once_with(0, 0.5)
+                mock_sleep.assert_called_once_with(0.25)
+
     def test_retry_policy_defaults_and_validation(self):
         policy = self._policy()
         self.assertEqual(policy.max_retries, 2)
@@ -1270,8 +1387,12 @@ class TestRetries(unittest.TestCase):
             {"max_retries": 1.5},
             {"max_retries": True},
             {"backoff_factor": -0.1},
+            {"backoff_factor": float("nan")},
+            {"backoff_factor": float("inf")},
             {"backoff_max": -1},
+            {"backoff_max": float("inf")},
             {"max_retry_after": -1},
+            {"max_retry_after": float("nan")},
             {"retry_statuses": frozenset({99})},
             {"retry_statuses": frozenset({"429"})},
         ]

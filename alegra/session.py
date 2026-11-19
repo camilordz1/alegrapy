@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlsplit
 import requests
 
-from alegra.exceptions import (AlegraAPIError, _error_for_exception, _error_for_status)
+from alegra.exceptions import (AlegraAPIError, AlegraNotFoundError, _error_for_exception,
+                               _error_for_status)
 from alegra.retry import RetryPolicy, _retry_delay, _should_retry, _sleep
 
 # Create a dedicated logger for the library, allowing applications to configure it
@@ -285,6 +286,9 @@ class AlegraClient:
         Returns:
             Any: Parsed JSON response from server (dict, list, or empty dict/value).
 
+        A ``DELETE`` that returns 404 on a retry (after a transient failure on the first
+        attempt) is treated as success and returns ``{}``.
+
         Raises:
             AlegraAPIError: If the server returns a non-2xx status code or a request error occurs
                 (transport errors chain the original exception as ``__cause__``). Typed subclasses
@@ -305,6 +309,14 @@ class AlegraClient:
             try:
                 return self._request_once(method, url, data, params, files, headers)
             except AlegraAPIError as error:
+                if (method.upper() == "DELETE" and attempt > 0
+                        and isinstance(error, AlegraNotFoundError)):
+                    # The first attempt may have deleted the record before failing
+                    logger.warning(
+                        f"{method.upper()} - {self._log_path(url)} - DELETE returned 404 on retry; "
+                        f"treating as already deleted"
+                    )
+                    return {}
                 if attempt >= policy.max_retries or not _should_retry(policy, method, files, error):
                     raise
                 delay = _retry_delay(policy, error, attempt)
