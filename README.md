@@ -103,6 +103,10 @@ except AlegraAPIError as err:
         ...  # márcala como "pendiente de verificar"; no la crees otra vez a ciegas
 ```
 
+Para facturas, `client.invoices.create_once(datos, dedup_key=...)` automatiza esa verificación y
+ofrece una cuarentena serializable; ver
+[Facturas sin duplicados](docs/guias/facturas-sin-duplicados.md).
+
 ## Recursos disponibles
 
 | Recurso | Propiedad | Operaciones extra |

@@ -5,6 +5,7 @@ Every exception in this module subclasses :class:`AlegraAPIError`, so existing
 """
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+import copy
 import math
 from typing import Any, Mapping, Optional
 
@@ -80,6 +81,50 @@ class AlegraTimeoutError(AlegraAPIError):
     The request may have reached the server and been processed, so non-idempotent
     requests (invoice or payment creation) must not be retried blindly.
     """
+
+
+class AlegraUnverifiedCreateError(AlegraAPIError):
+    """A create failed ambiguously and Alegra could not confirm whether it happened.
+
+    The request may have created the record. Store the result of :meth:`to_dict` in a
+    quarantine table/queue and reconcile it later; do not create the record again
+    blindly.
+
+    Attributes:
+        dedup_key (str): Caller-supplied key used for the lookup.
+        client_id (int or str): Client id used to scope the lookup.
+        resource (str): Resource that was being created.
+        payload (dict): Copy of the payload that was sent (marker included).
+        attempts (int): Number of POSTs made.
+        status_code (int, optional): Status of the last error, if any.
+        response_body (str, optional): Body of the last error, if any.
+    """
+    def __init__(self, message: str, *, dedup_key: str, client_id: Any, resource: str = "invoices",
+                 payload: Optional[dict] = None, attempts: int = 0,
+                 status_code: Optional[int] = None, response_body: Optional[str] = None,
+                 retry_after: Optional[float] = None) -> None:
+        super().__init__(message, status_code=status_code, response_body=response_body,
+                         retry_after=retry_after)
+        self.dedup_key = dedup_key
+        self.client_id = client_id
+        self.resource = resource
+        self.payload = copy.deepcopy(payload) if payload is not None else {}
+        self.attempts = attempts
+
+    def to_dict(self) -> dict:
+        """Return a JSON-serializable summary suitable for a quarantine table.
+
+        Contains no credentials, headers or connection details.
+        """
+        return {
+            "dedup_key": self.dedup_key,
+            "client_id": self.client_id,
+            "resource": self.resource,
+            "payload": copy.deepcopy(self.payload),
+            "attempts": self.attempts,
+            "status_code": self.status_code,
+            "response_body": self.response_body,
+        }
 
 
 # Any other HTTP status (405, 409, ...) is reported with the base class.

@@ -8,6 +8,7 @@ from alegra.exceptions import (
     AlegraServerError,
     AlegraConnectionError,
     AlegraTimeoutError,
+    AlegraUnverifiedCreateError,
 )
 from alegra.actions import Actions, actions
 from alegra.invoices import Invoices, invoices
@@ -32,6 +33,7 @@ __all__ = [
     'AlegraServerError',
     'AlegraConnectionError',
     'AlegraTimeoutError',
+    'AlegraUnverifiedCreateError',
     'RetryPolicy',
     'session',
     'Actions',
