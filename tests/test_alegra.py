@@ -714,6 +714,40 @@ class TestAlegraPy(unittest.TestCase):
         self.assertIn('files', kwargs)
         self.assertEqual(kwargs['files']['file'][0], 'dummy.txt')
 
+    @patch('requests.Session.request')
+    def test_base_url_without_trailing_slash_builds_correct_urls(self, mock_request):
+        mock_request.return_value = self._ok_response()
+
+        for base in ("https://api.alegra.com/api/v1", "https://api.alegra.com/api/v1/"):
+            with self.subTest(base=base):
+                client = AlegraClient(user="user", token="token", url=base)
+
+                client.contacts.list()
+                _, kwargs = mock_request.call_args
+                self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts")
+
+                client.contacts.read(5)
+                _, kwargs = mock_request.call_args
+                self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts/5")
+
+                self.assertEqual(client.url, "https://api.alegra.com/api/v1/")
+
+    @patch('requests.Session.request')
+    def test_legacy_base_url_without_trailing_slash_builds_correct_urls(self, mock_request):
+        mock_request.return_value = self._ok_response()
+        session.user = "legacy_user@example.com"
+        session.token = "legacy_token"
+        session.url = "https://api.alegra.com/api/v1"
+
+        contacts().list()
+        _, kwargs = mock_request.call_args
+        self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts")
+
+        contacts().read(5)
+        _, kwargs = mock_request.call_args
+        self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts/5")
+
+
 class TestTypedExceptions(unittest.TestCase):
     """Typed errors reachable without breaking `except AlegraAPIError`."""
 

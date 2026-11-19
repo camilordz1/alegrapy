@@ -1,7 +1,7 @@
 import base64
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 import requests
 
 from alegra.exceptions import (AlegraAPIError, AlegraNotFoundError, _error_for_exception,
@@ -15,6 +15,24 @@ logger = logging.getLogger("alegra")
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
+def _normalize_base_url(url: str) -> str:
+    """Ensure the base URL path ends with exactly one slash.
+
+    Resource URLs are built by simple concatenation, so a base URL without the trailing
+    slash would produce ``.../api/v1contacts``. Only the path is touched; the query
+    string and fragment are preserved.
+
+    Args:
+        url (str): Base API URL.
+
+    Returns:
+        str: The URL with a single trailing slash in its path.
+    """
+    parts = urlsplit(url)
+    path = parts.path.rstrip("/") + "/"
+    return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+
+
 def _validate_base_url(url: str) -> str:
     """Ensure the base API URL cannot expose credentials in transit.
 
@@ -22,7 +40,7 @@ def _validate_base_url(url: str) -> str:
         url (str): Base API URL to validate.
 
     Returns:
-        str: The same URL, unchanged, when valid.
+        str: The URL with exactly one trailing slash in its path when valid.
 
     Raises:
         ValueError: If the scheme is not https (http is allowed only for loopback hosts),
@@ -36,9 +54,9 @@ def _validate_base_url(url: str) -> str:
     if "@" in parts.netloc:
         raise ValueError("Invalid base URL: credentials in the URL are not allowed")
     if parts.scheme == "https":
-        return url
+        return _normalize_base_url(url)
     if parts.scheme == "http" and host in _LOOPBACK_HOSTS:
-        return url
+        return _normalize_base_url(url)
     raise ValueError(
         f"Insecure base URL (scheme {parts.scheme!r}, host {host!r}): https is required "
         f"(http is allowed only for {', '.join(sorted(_LOOPBACK_HOSTS))})"
@@ -202,10 +220,11 @@ class AlegraClient:
 
     @property
     def url(self) -> str:
-        """Get the base API URL."""
+        """Get the base API URL (always with exactly one trailing slash)."""
         if self._url is not None:
             return self._url
-        return session.url or "https://api.alegra.com/api/v1/"
+        # The legacy class attribute bypasses the setter; normalize it here too
+        return _normalize_base_url(session.url or "https://api.alegra.com/api/v1/")
 
     @url.setter
     def url(self, value: Optional[str]) -> None:
