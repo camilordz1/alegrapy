@@ -49,6 +49,13 @@ Probado en Python 3.10, 3.11, 3.12 y 3.13.
 
 ## Ejemplos
 
+Los ejemplos siguientes usan un cliente abierto. Créalo sin `with` (y llama a `client.close()`
+al terminar) o escribe el código dentro del bloque `with` del inicio rápido:
+
+```python
+client = AlegraClient(user=os.environ["ALEGRA_USER"], token=os.environ["ALEGRA_TOKEN"])
+```
+
 Recorrer todo el inventario activo:
 
 ```python
