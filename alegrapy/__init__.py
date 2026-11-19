@@ -1,9 +1,4 @@
-from importlib.metadata import PackageNotFoundError, version
-
-try:
-    __version__ = version("AlegraPy")
-except PackageNotFoundError:  # running from a source checkout without installed metadata
-    __version__ = "0.1.0"
+from alegrapy._version import __version__
 
 from alegrapy.session import AlegraClient, AlegraAPIError, session
 from alegrapy.retry import RetryPolicy

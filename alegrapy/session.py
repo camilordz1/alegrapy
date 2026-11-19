@@ -11,6 +11,8 @@ from alegrapy.retry import (RetryPolicy, _may_have_been_processed, _retry_delay,
                           _sleep)
 
 # Create a dedicated logger for the library, allowing applications to configure it
+# The logger keeps the pre-rename name "alegra" on purpose, so existing logging
+# configuration keeps working through 0.1.x; a rename is planned for 1.0
 logger = logging.getLogger("alegra")
 
 # Hosts allowed to use plain HTTP, for local testing only

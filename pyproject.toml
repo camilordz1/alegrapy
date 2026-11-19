@@ -1,10 +1,11 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+# 77+ is required for the PEP 639 SPDX `license` string and `license-files`
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "AlegraPy"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python client for the Alegra accounting and invoicing API"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,3 +40,6 @@ packages = ["alegrapy", "alegra"]
 
 [tool.setuptools.package-data]
 alegrapy = ["py.typed"]
+
+[tool.setuptools.dynamic]
+version = { attr = "alegrapy._version.__version__" }

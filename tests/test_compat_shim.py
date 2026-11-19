@@ -19,22 +19,20 @@ class TestCompatShim(unittest.TestCase):
                 self.assertIn(name, alegrapy.__all__)
         self.assertIsInstance(alegrapy.__version__, str)
 
-    def test_version_matches_installed_metadata(self):
+    def test_version_has_a_single_source(self):
+        source = importlib.import_module("alegrapy._version").__version__
+        self.assertEqual(alegrapy.__version__, source)
         try:
-            expected = importlib.metadata.version("AlegraPy")
+            installed = importlib.metadata.version("AlegraPy")
         except importlib.metadata.PackageNotFoundError:
-            expected = "0.1.0"
-        self.assertEqual(alegrapy.__version__, expected)
+            return
+        # A stale installed distribution would shadow the checkout's version
+        self.assertEqual(installed, source)
 
-    def test_import_alegra_warns_once_and_reexports_identity(self):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+    def test_import_alegra_reexports_identity(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
             import alegra
-
-        messages = [str(item.message) for item in caught
-                    if issubclass(item.category, DeprecationWarning)]
-        self.assertEqual(len(messages), 1)
-        self.assertIn("use 'import alegrapy'", messages[0])
 
         self.assertIs(alegra.AlegraClient, alegrapy.AlegraClient)
         self.assertEqual(alegra.__all__, alegrapy.__all__)
@@ -58,6 +56,18 @@ class TestCompatShim(unittest.TestCase):
         self.assertIs(sys.modules["alegra.invoices"], sys.modules["alegrapy.invoices"])
         self.assertIs(sys.modules["alegra.exceptions"], sys.modules["alegrapy.exceptions"])
 
+    def test_submodules_outside_all_are_package_attributes(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            import alegra
+            import alegra.exceptions  # noqa: F401
+
+        for name in ("exceptions", "retry", "dedup"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, alegrapy.__all__)
+                self.assertIs(getattr(alegra, name), sys.modules[f"alegrapy.{name}"])
+        self.assertIs(alegra.exceptions.AlegraNotFoundError, alegrapy.AlegraNotFoundError)
+
     def test_legacy_names_still_work(self):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
@@ -75,6 +85,7 @@ class TestCompatShim(unittest.TestCase):
             [sys.executable, "-W", "error::DeprecationWarning", "-c", code],
             cwd=root, capture_output=True, text=True)
         self.assertNotEqual(strict.returncode, 0)
+        self.assertIn("The 'alegra' import name is deprecated", strict.stderr)
 
         default = subprocess.run(
             [sys.executable, "-W", "default", "-c", code],

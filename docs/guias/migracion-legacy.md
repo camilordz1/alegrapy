@@ -14,6 +14,13 @@ from alegrapy import AlegraClient
 from alegra import AlegraClient
 ```
 
+El **logger** conserva el nombre `"alegra"` en la serie 0.1.x, para que tu configuración de
+logging siga funcionando: configura `logging.getLogger("alegra")`, no `"alegrapy"`.
+
+Si tus tests parchean el SDK, hazlo sobre el objeto del módulo
+(`importlib.import_module("alegrapy.invoices")` + `patch.object`), no con rutas en texto como
+`"alegra.invoices.time"`: `alegra.invoices` es el alias legacy de la clase, no el módulo.
+
 ## Comparación
 
 === "Recomendado: AlegraClient"
