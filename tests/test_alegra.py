@@ -1386,6 +1386,38 @@ class TestRetries(unittest.TestCase):
                 self.assertEqual(result, {})
                 self.assertEqual(mock_request.call_count, 2)
 
+    def test_delete_404_after_any_ambiguous_earlier_attempt_is_success(self):
+        from requests.exceptions import ReadTimeout
+
+        policy = self._policy(max_retries=2)
+        with patch('requests.Session.request') as mock_request:
+            mock_request.side_effect = [
+                ReadTimeout("maybe deleted"),
+                self._response(429, headers={"Retry-After": "1"}),
+                self._response(404),
+            ]
+            with patch('alegra.retry.time.sleep'):
+                result = self._client(retry=policy).query("delete", self.URL + "/1")
+
+        self.assertEqual(result, {})
+        self.assertEqual(mock_request.call_count, 3)
+
+    def test_delete_404_after_only_unprocessed_failures_still_raises(self):
+        from requests.exceptions import ConnectTimeout
+
+        policy = self._policy(max_retries=2)
+        with patch('requests.Session.request') as mock_request:
+            mock_request.side_effect = [
+                self._response(429, headers={"Retry-After": "1"}),
+                ConnectTimeout("never sent"),
+                self._response(404),
+            ]
+            with patch('alegra.retry.time.sleep'):
+                with self.assertRaises(alegra.AlegraNotFoundError):
+                    self._client(retry=policy).query("delete", self.URL + "/1")
+
+        self.assertEqual(mock_request.call_count, 3)
+
     def test_delete_first_attempt_404_still_raises(self):
         with patch('requests.Session.request') as mock_request:
             mock_request.return_value = self._response(404)

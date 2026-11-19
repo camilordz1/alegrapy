@@ -103,8 +103,11 @@ class TestThreadSafety(unittest.TestCase):
     def test_close_is_idempotent_with_the_real_session(self):
         client = self._client()
 
-        client.close()
-        client.close()
+        with patch.object(client.session, 'close', wraps=client.session.close) as spy:
+            client.close()
+            client.close()
+
+        self.assertEqual(spy.call_count, 2)
 
     def test_context_manager_returns_client_and_closes(self):
         client = self._client()

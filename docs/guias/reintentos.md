@@ -49,11 +49,13 @@ except AlegraConnectionError as e:
   el registro antes de fallar (por ejemplo, un timeout después de que Alegra procesó el borrado).
 
 - `404` en el **primer** intento: se lanza `AlegraNotFoundError`, como siempre.
-- `404` en un **reintento**: se considera éxito (`{}` más un `WARNING`) **solo si** el intento
+- `404` en un **reintento**: se considera éxito (`{}` más un `WARNING`) **solo si** algún intento
   anterior pudo haber sido procesado por Alegra: `AlegraTimeoutError`, `AlegraConnectionError`
-  con `request_not_sent == False`, o un `AlegraServerError` (5xx).
-- Si el fallo anterior fue un `429` o una petición que no se envió (`request_not_sent == True`),
-  el `404` es un “no existe” real y se lanza `AlegraNotFoundError`.
+  con `request_not_sent == False`, o un `AlegraServerError` (5xx). Basta con que uno de los
+  intentos anteriores haya sido ambiguo.
+- Si todos los fallos anteriores fueron `429` o peticiones que no se enviaron
+  (`request_not_sent == True`), el `404` es un “no existe” real y se lanza
+  `AlegraNotFoundError`.
 - `404` en un `GET`, `PUT` o `POST` reintentado sigue lanzando `AlegraNotFoundError`.
 
 El estado `429` se controla con `retry_statuses` para todos los métodos: si lo quitas de la

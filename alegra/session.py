@@ -331,9 +331,9 @@ class AlegraClient:
             Any: Parsed JSON response from server (dict, list, or empty dict/value).
 
         A ``DELETE`` that returns 404 on a retry is treated as success and returns ``{}``
-        only when the previous attempt may have been processed (a timeout, an ambiguous
-        connection error or a 5xx). After a 429 or a provably unsent request, the 404 is a
-        genuine not-found and raises ``AlegraNotFoundError``.
+        only when any earlier attempt may have been processed (a timeout, an ambiguous
+        connection error or a 5xx). After only 429s or provably unsent requests, the 404
+        is a genuine not-found and raises ``AlegraNotFoundError``.
 
         Raises:
             AlegraAPIError: If the server returns a non-2xx status code or a request error occurs
@@ -350,7 +350,7 @@ class AlegraClient:
         headers = self._request_headers(files)
         policy = self.retry
         attempt = 0
-        previous_error: Optional[AlegraAPIError] = None
+        may_have_been_processed = False
 
         while True:
             try:
@@ -358,15 +358,15 @@ class AlegraClient:
             except AlegraAPIError as error:
                 if (method.upper() == "DELETE" and attempt > 0
                         and isinstance(error, AlegraNotFoundError)
-                        and previous_error is not None
-                        and _may_have_been_processed(previous_error)):
-                    # The earlier attempt may have deleted the record before failing
+                        and may_have_been_processed):
+                    # Any earlier attempt may have deleted the record before failing
                     logger.warning(
                         f"{method.upper()} - {self._log_path(url)} - DELETE returned 404 on retry; "
                         f"treating as already deleted"
                     )
                     return {}
-                previous_error = error
+                may_have_been_processed = (may_have_been_processed
+                                           or _may_have_been_processed(error))
                 if attempt >= policy.max_retries or not _should_retry(policy, method, files, error):
                     raise
                 delay = _retry_delay(policy, error, attempt)
