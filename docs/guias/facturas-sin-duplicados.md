@@ -152,7 +152,7 @@ key = make_dedup_key_from(
 | Textos | Se recortan espacios al inicio/fin. |
 | Números (`int`, `float`, `Decimal`) | Se comparan por valor, sin exponente ni ceros finales (`21008.4 == 21008.40 == Decimal("21008.400")`, `-0 == 0`). |
 | `bool` | Sigue siendo booleano; nunca se trata como número (`True` ≠ `1`). |
-| Textos numéricos | Siguen siendo textos: `"21008.40"` ≠ `21008.40`. |
+| Textos numéricos | Siguen siendo textos y nunca coinciden con un número: `"1"` ≠ `1`, `"21008.4"` ≠ `21008.4`. |
 | Listas proyectadas con `[]` | Los campos de un mismo elemento se agrupan (el `id` de un ítem va con su propia `quantity`) y luego los elementos se ordenan por su JSON canónico: el orden original no importa, pero la correspondencia sí. |
 | Otras listas | Conservan su orden. |
 | `date` / `datetime` | `isoformat()`. |

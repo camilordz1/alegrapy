@@ -60,6 +60,16 @@ class TestMakeDedupKey(unittest.TestCase):
                 self.assertRegex(key, KEY_PATTERN)
 
 
+class TestReadableKeysNeverLookHashed(unittest.TestCase):
+
+    def test_parts_shaped_like_a_hash_are_hashed(self):
+        hex40 = "a" * 40
+        key = make_dedup_key("h", hex40)
+        self.assertNotEqual(key, f"h:{hex40}")
+        self.assertTrue(key.startswith("h:"))
+        self.assertNotEqual(make_dedup_key("ns", "h", hex40), f"ns:h:{hex40}")
+
+
 class TestMakeDedupKeyFrom(unittest.TestCase):
 
     PAYLOAD = {
@@ -95,6 +105,19 @@ class TestMakeDedupKeyFrom(unittest.TestCase):
         self.assertNotEqual(make_dedup_key_from(first, fields),
                             make_dedup_key_from(swapped_taxes, fields))
         self.assertEqual(make_dedup_key_from(first, fields), make_dedup_key_from(reordered, fields))
+
+    def test_numbers_never_collide_with_numeric_strings(self):
+        for number, text in ((1, "1"), (21008.4, "21008.4"), (float("nan"), "nan")):
+            with self.subTest(number=number):
+                self.assertNotEqual(make_dedup_key_from({"v": number}, ["v"]),
+                                    make_dedup_key_from({"v": text}, ["v"]))
+
+    def test_malformed_projection_path_is_rejected(self):
+        payload = {"items": [{"id": 1}]}
+        for path in ("items[]id", "items[]x.id"):
+            with self.subTest(path=path):
+                with self.assertRaises(ValueError):
+                    make_dedup_key_from(payload, [path])
 
     def test_numbers_compared_by_value_but_strings_stay_strings(self):
         number_payload = dict(self.PAYLOAD, items=[{"price": 21008.4}])

@@ -95,7 +95,9 @@ def make_dedup_key(*parts: Any, namespace: Any = None) -> str:
     texts.extend(_key_part_text(part, "part") for part in parts)
 
     readable = ":".join(texts)
-    if len(readable) <= 64 and all(_READABLE_PART.fullmatch(text) for text in texts):
+    # A bare "h" part would make a readable key look like a hashed one ("h:<hex>")
+    if (len(readable) <= 64 and "h" not in texts
+            and all(_READABLE_PART.fullmatch(text) for text in texts)):
         return readable
     digest = hashlib.sha256(_canonical_json(texts).encode("utf-8")).hexdigest()[:40]
     return f"h:{digest}"
@@ -162,7 +164,9 @@ def make_dedup_key_from(payload: Mapping, fields: Sequence, namespace: Any = Non
         if "[]" in path:
             # Group by the first projected list so sub-fields stay paired per element
             prefix, _, rest = path.partition("[]")
-            groups.setdefault(prefix, []).append((path, rest[1:] if rest.startswith(".") else rest))
+            if rest and not rest.startswith("."):
+                raise ValueError(f"Field path not found: {path!r}")
+            groups.setdefault(prefix, []).append((path, rest[1:]))
         else:
             value, _ = _extract_path(payload, path)
             values[path] = _canonical_value(value)
@@ -253,21 +257,27 @@ def _canonical_projected(value: Any, projected: bool) -> Any:
 
 
 def _canonical_value(value: Any) -> Any:
-    """Canonical JSON value used by ``make_dedup_key_from``."""
+    """Canonical JSON value used by ``make_dedup_key_from``.
+
+    Scalars are tagged by type ("s:" text, "n:" number, "o:" other) so a number never
+    hashes like a numeric-looking string (``1`` vs ``"1"``). Dates are treated as their ISO
+    text, because Alegra receives dates as ISO strings (``date(2026, 11, 19)`` equals
+    ``"2026-11-19"``).
+    """
     if value is None:
         return None
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
-        return value.strip()
+        return "s:" + value.strip()
     if isinstance(value, (int, float, Decimal)):
-        return _number_text(value)
+        return "n:" + _number_text(value)
     if isinstance(value, (datetime, date)):
-        return value.isoformat()
+        return "s:" + value.isoformat()
     if isinstance(value, Mapping):
         return {str(key): _canonical_value(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_canonical_value(item) for item in value]
     if isinstance(value, (set, frozenset)):
         return sorted((_canonical_value(item) for item in value), key=_canonical_json)
-    return str(value)
+    return "o:" + str(value)
