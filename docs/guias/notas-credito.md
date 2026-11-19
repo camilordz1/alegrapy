@@ -85,6 +85,11 @@ except AlegraAlreadyAnnulledError as err:
     registrar_para_revision(err.invoice_id)
 ```
 
+Si la factura aparece anulada **después de un POST ambiguo de esta misma llamada**, lo más probable
+es que ese POST haya creado la nota. En ese caso no se lanza `AlegraAlreadyAnnulledError` sino
+`AlegraUnverifiedCreateError` (con `dedup_key` y el payload, listo para la cuarentena), cuya
+causa (`err.__cause__`) es el `AlegraAlreadyAnnulledError`.
+
 Una factura cerrada porque fue **pagada** (`balance` o `totalPaid` mayores que cero) no está
 anulada: sigue siendo un error de precondición (solo se anulan facturas abiertas).
 
@@ -135,6 +140,11 @@ except AlegraStampError as err:
 
 Si el `400` no tiene esa forma (por ejemplo, un error de validación que repite la factura o el
 cliente), se lanza el error tipado normal (`AlegraValidationError`).
+
+Volver a llamar `annul()` para esa factura **no** da la anulación por terminada: la búsqueda
+encuentra la nota con la marca, ve que no está timbrada y vuelve a lanzar `AlegraStampError` con
+esa nota en `err.document`. Solo una nota timbrada y aceptada (`STAMPED_AND_ACCEPTED...`) se
+devuelve como éxito. Con `stamp=False` esta comprobación no aplica.
 
 ## `void` sigue existiendo
 

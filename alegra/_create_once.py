@@ -139,11 +139,13 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
 
     # The first POST may have created the document, so a failing guard here must not
     # surface raw: quarantine it, unless the guard reached a definitive outcome
+    # "Already annulled" here most likely means this call's own first POST succeeded, so it
+    # is quarantined too (with the dedup data) instead of surfacing only the invoice id
     try:
         existing = before_post() if before_post is not None else None
-    except (AlegraAlreadyAnnulledError, AlegraStampError):
+    except AlegraStampError:
         raise
-    except (AlegraAPIError, ValueError) as guard_error:
+    except (AlegraAlreadyAnnulledError, AlegraAPIError, ValueError) as guard_error:
         raise _unverified_error(dedup_key, client_id, resource, payload,
                                 attempts, last_error) from guard_error
     if existing is not None:
@@ -181,6 +183,9 @@ def _verified_lookup(lookup: Callable[[], Optional[Dict[str, Any]]], verify_wind
     """Run the verification window; wrap lookup failures as unverified creates."""
     try:
         return _verify_until_found(lookup, verify_window, dedup_key, log_path)
+    except AlegraStampError:
+        # The lookup found the document but it was not stamped: a definitive outcome
+        raise
     except AlegraAPIError as lookup_error:
         raise _unverified_error(dedup_key, client_id, resource, payload, attempts,
                                 lookup_error, details_source=cause) from lookup_error

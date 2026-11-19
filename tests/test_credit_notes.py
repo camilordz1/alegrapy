@@ -28,6 +28,8 @@ INVOICE = {
 }
 
 MARKER = "alegrapy:dedup:annul:11742"
+# A completed annulment: the note was stamped and accepted by the tax authority
+STAMPED = {"legalStatus": "STAMPED_AND_ACCEPTED"}
 
 
 class TestCreditNotes(unittest.TestCase):
@@ -170,7 +172,7 @@ class TestCreditNotes(unittest.TestCase):
                                  "NO_REFERENCE_TO_ELECTRONIC_INVOICE")
 
     def test_annul_returns_existing_note_from_precheck(self):
-        existing = {"id": 901, "observations": MARKER}
+        existing = {"id": 901, "observations": MARKER, "stamp": STAMPED}
         self.note_pages = [[existing]]
 
         result = self.client.invoices.annul(11742, "motivo")
@@ -179,7 +181,7 @@ class TestCreditNotes(unittest.TestCase):
         self.assertEqual(self._post_calls(), [])
 
     def test_annul_verifies_ambiguous_post(self):
-        existing = {"id": 902, "observations": MARKER}
+        existing = {"id": 902, "observations": MARKER, "stamp": STAMPED}
         self.note_pages = [[], [existing]]
         self.posts = [alegra.AlegraServerError("boom", status_code=503)]
 
@@ -190,6 +192,41 @@ class TestCreditNotes(unittest.TestCase):
         self.assertIs(result, existing)
         self.assertEqual(len(self._post_calls()), 1)
         self.assertGreaterEqual(len(self._note_gets()), 2)
+
+    def test_existing_unstamped_annulment_note_is_reported_not_returned(self):
+        unstamped = {"id": 950, "observations": MARKER, "client": {"id": 126},
+                     "stamp": {"legalStatus": None}}
+        self.note_pages = [[unstamped]]
+
+        with self.assertRaises(alegra.AlegraStampError) as ctx:
+            self.client.invoices.annul(11742, "motivo")
+
+        self.assertEqual(ctx.exception.document["id"], 950)
+        self.assertEqual(self._post_calls(), [])
+
+    def test_existing_unstamped_note_is_fine_when_stamping_was_not_requested(self):
+        unstamped = {"id": 951, "observations": MARKER, "client": {"id": 126}}
+        self.note_pages = [[unstamped]]
+
+        result = self.client.invoices.annul(11742, "motivo", stamp=False)
+
+        self.assertEqual(result["id"], 951)
+
+    def test_already_annulled_after_ambiguous_post_is_quarantined(self):
+        annulled = dict(self.invoice, status="closed", balance=0, totalPaid=0)
+        # initial read, guard before POST 1, guard before POST 2 (now annulled)
+        self.invoice_states = [self.invoice, self.invoice, annulled]
+        self.note_pages = [[], [], []]
+        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+
+        with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
+            with patch.object(_FLOW_TIME, 'sleep'):
+                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                    self.client.invoices.annul(11742, "motivo", verify_window=0)
+
+        self.assertIsInstance(ctx.exception.__cause__, alegra.AlegraAlreadyAnnulledError)
+        self.assertEqual(ctx.exception.dedup_key, "annul:11742")
+        self.assertEqual(len(self._post_calls()), 1)
 
     def test_retry_guard_failure_after_ambiguous_post_is_quarantined(self):
         paid = dict(self.invoice, status="closed", balance=0, totalPaid=21008.4)
@@ -291,7 +328,7 @@ class TestCreditNotes(unittest.TestCase):
 
     def test_annul_returns_note_when_invoice_is_already_annulled(self):
         self.invoice = self._closed_invoice()
-        existing = {"id": 950, "observations": MARKER, "client": {"id": 126}}
+        existing = {"id": 950, "observations": MARKER, "client": {"id": 126}, "stamp": STAMPED}
         self.note_pages = [[existing]]
 
         result = self.client.invoices.annul(11742, "motivo")
@@ -310,7 +347,7 @@ class TestCreditNotes(unittest.TestCase):
         self.assertEqual(self._post_calls(), [])
 
     def test_annul_does_not_post_again_when_invoice_became_closed(self):
-        existing = {"id": 951, "observations": MARKER, "client": {"id": 126}}
+        existing = {"id": 951, "observations": MARKER, "client": {"id": 126}, "stamp": STAMPED}
         self.invoice_states = [copy.deepcopy(INVOICE), copy.deepcopy(INVOICE),
                                self._closed_invoice()]
         self.note_pages = [[], [], [existing]]
@@ -331,9 +368,11 @@ class TestCreditNotes(unittest.TestCase):
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraAlreadyAnnulledError):
+                # Our own ambiguous first POST most likely annulled it: quarantine
+                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.annul(11742, "motivo", verify_window=0)
 
+        self.assertIsInstance(ctx.exception.__cause__, alegra.AlegraAlreadyAnnulledError)
         self.assertEqual(len(self._post_calls()), 1)
 
     def test_annul_rejects_paid_closed_invoice(self):

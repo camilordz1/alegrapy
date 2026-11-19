@@ -64,6 +64,13 @@ def _enum_value(value: Any) -> Any:
     return value.value if isinstance(value, enum.Enum) else value
 
 
+def _note_is_stamped(note: Dict[str, Any]) -> bool:
+    """Whether a credit note was stamped and accepted (with or without observations)."""
+    stamp_data = note.get("stamp")
+    legal_status = stamp_data.get("legalStatus") if isinstance(stamp_data, dict) else None
+    return isinstance(legal_status, str) and legal_status.startswith("STAMPED_AND_ACCEPTED")
+
+
 def _invoice_is_annulled(invoice: Dict[str, Any]) -> bool:
     """An invoice fully cancelled by an annulment note: closed, zero balance and paid."""
     return (invoice.get("status") == "closed"
@@ -319,14 +326,22 @@ class Invoices(Actions):
         invoice_id = validate_id(invoice.get("id") or id)
 
         if dedup_key is None:
-            key = make_dedup_key("annul", id)
+            key = make_dedup_key("annul", invoice_id)
         else:
             key = validate_dedup_key(dedup_key)
 
         credit_notes = self.client.credit_notes
 
         def lookup() -> Optional[Dict[str, Any]]:
-            return credit_notes.reconcile(key, client_id, lookup_pages=lookup_pages)
+            note = credit_notes.reconcile(key, client_id, lookup_pages=lookup_pages)
+            if note is not None and stamp and not _note_is_stamped(note):
+                # A previous attempt created the note but stamping failed: the
+                # annulment is not complete, so report it instead of returning it
+                raise AlegraStampError(
+                    "An annulment credit note exists but it is not stamped",
+                    document=note,
+                )
+            return note
 
         def guard() -> Optional[Dict[str, Any]]:
             """Re-read the invoice; never POST when it is already annulled."""
