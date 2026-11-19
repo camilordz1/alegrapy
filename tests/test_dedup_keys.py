@@ -79,6 +79,23 @@ class TestMakeDedupKeyFrom(unittest.TestCase):
         self.assertEqual(make_dedup_key_from(self.PAYLOAD, fields),
                          make_dedup_key_from(reordered, fields))
 
+    def test_projected_fields_keep_their_pairing_within_each_item(self):
+        fields = ["client.id", "items[].id", "items[].quantity"]
+        first = {"client": {"id": 126}, "items": [{"id": 1, "quantity": 2}, {"id": 2, "quantity": 1}]}
+        second = {"client": {"id": 126}, "items": [{"id": 1, "quantity": 1}, {"id": 2, "quantity": 2}]}
+
+        self.assertNotEqual(make_dedup_key_from(first, fields), make_dedup_key_from(second, fields))
+
+    def test_nested_projection_inside_a_projected_item(self):
+        fields = ["items[].id", "items[].tax[].id"]
+        first = {"items": [{"id": 1, "tax": [{"id": 3}, {"id": 4}]}, {"id": 2, "tax": []}]}
+        swapped_taxes = {"items": [{"id": 1, "tax": []}, {"id": 2, "tax": [{"id": 4}, {"id": 3}]}]}
+        reordered = {"items": [{"id": 2, "tax": []}, {"id": 1, "tax": [{"id": 4}, {"id": 3}]}]}
+
+        self.assertNotEqual(make_dedup_key_from(first, fields),
+                            make_dedup_key_from(swapped_taxes, fields))
+        self.assertEqual(make_dedup_key_from(first, fields), make_dedup_key_from(reordered, fields))
+
     def test_numbers_compared_by_value_but_strings_stay_strings(self):
         number_payload = dict(self.PAYLOAD, items=[{"price": 21008.4}])
         decimal_payload = dict(self.PAYLOAD, items=[{"price": Decimal("21008.40")}])

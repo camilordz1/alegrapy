@@ -109,8 +109,10 @@ def make_dedup_key_from(payload: Mapping, fields: Sequence, namespace: Any = Non
     into every element of a list (``"items[].id"``).
 
     Canonicalization before hashing: dict keys are sorted, strings are stripped, numbers
-    are compared by value, projected lists are sorted (their original order does not
-    matter), other lists keep their order, dates and datetimes use ISO 8601, and ``None``
+    are compared by value, and paths projected through the same list (``items[].id`` and
+    ``items[].quantity``) are combined into one record per element, so each item keeps its
+    own values together; those records are then sorted (element order does not matter).
+    Other lists keep their order, dates and datetimes use ISO 8601, and ``None``
     stays null. Selecting a date or timestamp usually defeats deduplication because every
     payload differs.
 
@@ -155,9 +157,17 @@ def make_dedup_key_from(payload: Mapping, fields: Sequence, namespace: Any = Non
             )
 
     values = {}
+    groups: dict = {}
     for path in paths:
-        value, projected = _extract_path(payload, path)
-        values[path] = _canonical_projected(value, projected)
+        if "[]" in path:
+            # Group by the first projected list so sub-fields stay paired per element
+            prefix, _, rest = path.partition("[]")
+            groups.setdefault(prefix, []).append((path, rest[1:] if rest.startswith(".") else rest))
+        else:
+            value, _ = _extract_path(payload, path)
+            values[path] = _canonical_value(value)
+    for prefix, members in groups.items():
+        values[f"{prefix}[]"] = _canonical_group(payload, prefix, members)
 
     document = {"fields": sorted(paths), "values": values}
     if namespace is not None:
@@ -200,6 +210,37 @@ def _extract_path(payload: Any, path: str) -> Any:
     if len(values) != 1:
         raise ValueError(f"Field path not found: {path!r}")
     return values[0], False
+
+
+def _canonical_group(payload: Any, prefix: str, members: list) -> list:
+    """Canonicalize every path projected through the same list as one record per element.
+
+    Selected sub-fields of one element stay together (an item's id with its own quantity),
+    then the records are sorted, so element order does not matter but pairing does.
+    """
+    first_path = members[0][0]
+    try:
+        elements, _ = _extract_path(payload, prefix)
+    except ValueError:
+        raise ValueError(f"Field path not found: {first_path!r}") from None
+    if not isinstance(elements, (list, tuple)):
+        raise ValueError(f"Field path not found: {first_path!r}")
+
+    records = []
+    for element in elements:
+        record = {}
+        for path, rest in members:
+            if not rest:
+                record[path] = _canonical_value(element)
+                continue
+            try:
+                value, projected = _extract_path(element, rest)
+            except ValueError:
+                raise ValueError(f"Field path not found: {path!r}") from None
+            record[path] = _canonical_projected(value, projected)
+        records.append(record)
+    records.sort(key=_canonical_json)
+    return records
 
 
 def _canonical_projected(value: Any, projected: bool) -> Any:
