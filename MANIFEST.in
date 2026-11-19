@@ -1,0 +1,24 @@
+include README.md
+include LICENSE.txt
+include pyproject.toml
+
+recursive-include alegrapy *.py py.typed
+recursive-include alegra *.py
+
+prune tests
+prune docs
+prune odd
+prune env
+prune site
+prune build
+prune dist
+prune AlegraPy.egg-info
+prune alegrapy.egg-info
+
+exclude config.ini
+exclude alegra.log
+exclude main.py
+
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude *.log

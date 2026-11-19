@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "AlegraPy"
+version = "0.1.0"
+description = "Python client for the Alegra accounting and invoicing API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [
+    { name = "Camilo Andrés Rodríguez Higuera", email = "andres.roh@gmail.com" },
+]
+keywords = ["alegra", "accounting", "invoicing", "dian", "colombia"]
+dependencies = ["requests>=2.32,<3"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+
+[project.urls]
+Homepage = "https://github.com/camilordz1/alegrapy"
+Repository = "https://github.com/camilordz1/alegrapy"
+Documentation = "https://camilordz1.github.io/alegrapy/"
+Issues = "https://github.com/camilordz1/alegrapy/issues"
+Changelog = "https://github.com/camilordz1/alegrapy/blob/master/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["alegrapy", "alegra"]
+
+[tool.setuptools.package-data]
+alegrapy = ["py.typed"]
