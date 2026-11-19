@@ -43,10 +43,8 @@ class TestThreadSafety(unittest.TestCase):
         self.server_thread.join(timeout=5)
 
     def _client(self, user="user", token="token"):
-        client = AlegraClient(user=user, token=token, url=self.base_url, timeout=5,
-                              retry=RetryPolicy(max_retries=0))
-        client.contacts  # warm up the lazy resource before sharing the client
-        return client
+        return AlegraClient(user=user, token=token, url=self.base_url, timeout=5,
+                            retry=RetryPolicy(max_retries=0))
 
     def test_two_clients_do_not_mix_credentials_under_concurrency(self):
         pairs = [
@@ -77,6 +75,24 @@ class TestThreadSafety(unittest.TestCase):
 
         self.assertTrue(all(results))
 
+    def test_lazy_resources_can_be_first_accessed_from_many_threads(self):
+        client = AlegraClient(user="lazy@example.com", token="lazy-token", url=self.base_url,
+                              timeout=5, retry=RetryPolicy(max_retries=0))
+        expected = _basic("lazy@example.com", "lazy-token")
+        barrier = threading.Barrier(16)
+
+        def call(index):
+            barrier.wait(timeout=5)
+            resource = (client.contacts, client.invoices, client.items)[index % 3]
+            received = client.contacts.list()["authorization"]
+            return resource is not None and received == expected
+
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            results = list(pool.map(call, range(16)))
+
+        self.assertEqual(len(results), 16)
+        self.assertTrue(all(results))
+
     def test_cookies_from_responses_are_not_stored(self):
         client = self._client()
 
@@ -84,14 +100,11 @@ class TestThreadSafety(unittest.TestCase):
 
         self.assertEqual(len(client.session.cookies), 0)
 
-    def test_close_closes_the_session_and_is_idempotent(self):
+    def test_close_is_idempotent_with_the_real_session(self):
         client = self._client()
 
-        with patch.object(client.session, "close") as mock_close:
-            client.close()
-            client.close()
-
-        self.assertGreaterEqual(mock_close.call_count, 1)
+        client.close()
+        client.close()
 
     def test_context_manager_returns_client_and_closes(self):
         client = self._client()

@@ -45,13 +45,15 @@ except AlegraConnectionError as e:
 
 ## DELETE y el 404 en un reintento
 
-`DELETE` es idempotente, pero un reintento puede recibir `404` porque el primer intento ya borró
-el registro antes de fallar (por ejemplo, un timeout después de que Alegra procesó el borrado).
+- `DELETE` es idempotente, pero un reintento puede recibir `404` porque el primer intento ya borró
+  el registro antes de fallar (por ejemplo, un timeout después de que Alegra procesó el borrado).
 
 - `404` en el **primer** intento: se lanza `AlegraNotFoundError`, como siempre.
-- `404` en un **reintento** (tras un timeout, error de conexión o `5xx`): se considera éxito, se
-  devuelve `{}` y se registra un `WARNING` (“DELETE returned 404 on retry; treating as already
-  deleted”).
+- `404` en un **reintento**: se considera éxito (`{}` más un `WARNING`) **solo si** el intento
+  anterior pudo haber sido procesado por Alegra: `AlegraTimeoutError`, `AlegraConnectionError`
+  con `request_not_sent == False`, o un `AlegraServerError` (5xx).
+- Si el fallo anterior fue un `429` o una petición que no se envió (`request_not_sent == True`),
+  el `404` es un “no existe” real y se lanza `AlegraNotFoundError`.
 - `404` en un `GET`, `PUT` o `POST` reintentado sigue lanzando `AlegraNotFoundError`.
 
 El estado `429` se controla con `retry_statuses` para todos los métodos: si lo quitas de la

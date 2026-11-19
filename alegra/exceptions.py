@@ -177,8 +177,9 @@ def _was_not_sent(exc: Optional[BaseException]) -> bool:
     cause = exc.args[0] if exc.args else None
     if not isinstance(cause, urllib3.exceptions.MaxRetryError):
         return False
-    # NewConnectionError subclasses ConnectTimeoutError in urllib3 1.26 and 2.x; a
-    # connect timeout wrapped in MaxRetryError therefore lands here too.
+    # NewConnectionError subclasses ConnectTimeoutError (urllib3 1.26 and 2.x). A plain
+    # ConnectTimeoutError is not a NewConnectionError, and requests raises ConnectTimeout
+    # for it, which the first check already handled.
     return isinstance(cause.reason, urllib3.exceptions.NewConnectionError)
 
 

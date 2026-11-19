@@ -13,8 +13,8 @@ from typing import Any, FrozenSet, Optional
 
 import requests
 
-from alegra.exceptions import (AlegraAPIError, AlegraConnectionError, AlegraTimeoutError,
-                               _was_not_sent)
+from alegra.exceptions import (AlegraAPIError, AlegraConnectionError, AlegraServerError,
+                               AlegraTimeoutError, _was_not_sent)
 
 # Methods whose repetition cannot create a second record on Alegra's side.
 IDEMPOTENT_METHODS: FrozenSet[str] = frozenset({"GET", "PUT", "DELETE", "HEAD", "OPTIONS"})
@@ -103,6 +103,33 @@ def _should_retry(policy: RetryPolicy, method: str, files: Any, error: AlegraAPI
     if error.status_code is not None:
         return error.status_code == 429 and 429 in policy.retry_statuses
     return error.request_not_sent
+
+
+def _may_have_been_processed(error: AlegraAPIError) -> bool:
+    """Tell whether a failed attempt could have been processed by Alegra.
+
+    This is the ambiguity test used for non-idempotent safety and for the DELETE
+    404-on-retry shortcut:
+
+    - A timeout may arrive after Alegra processed the request.
+    - A connection error does too, unless ``request_not_sent`` proves otherwise.
+    - Any 5xx means the server received and started processing the request.
+
+    A 429, a provably unsent request and any other status are not ambiguous.
+
+    Args:
+        error (AlegraAPIError): Error raised by the previous attempt.
+
+    Returns:
+        bool: ``True`` when the request may have reached Alegra.
+    """
+    if isinstance(error, AlegraTimeoutError):
+        return True
+    if isinstance(error, AlegraConnectionError):
+        return not error.request_not_sent
+    if isinstance(error, AlegraServerError):
+        return True
+    return False
 
 
 def _retry_delay(policy: RetryPolicy, error: AlegraAPIError, attempt: int) -> Optional[float]:

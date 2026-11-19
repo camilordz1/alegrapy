@@ -11,6 +11,7 @@ seguro, qué no, y cómo cerrar clientes de forma determinista.
 | Varios clientes con credenciales distintas se usan **al mismo tiempo**. | Sí. Un cliente nunca toma las credenciales de otro. |
 | Cambiar `user`, `token`, `url`, `timeout` o `retry` mientras otros hilos usan el cliente. | No. Configura primero y comparte después. |
 | Varias cuentas (tenants) usando el `session` global o los recursos de módulo (`contacts()`, `invoices()`, …). | No. Son estado global del proceso: las credenciales se pisan entre tenants. Usa un `AlegraClient` por tenant. |
+| Acceder por primera vez a `client.contacts`, `client.invoices`, `client.items`, etc. desde varios hilos. | Sí. Una primera carga concurrente puede crear dos objetos de recurso equivalentes y sin estado, ambos ligados al mismo cliente; es inofensivo. |
 
 Cada cliente conserva **una** `requests.Session` para reutilizar conexiones. Como la API de
 Alegra se autentica con un encabezado en cada petición y no necesita cookies, el cliente rechaza

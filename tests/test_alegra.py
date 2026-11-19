@@ -1343,6 +1343,49 @@ class TestRetries(unittest.TestCase):
                 self.assertEqual(result, {})
                 self.assertEqual(mock_request.call_count, 2)
 
+    def test_delete_404_after_unprocessed_failure_still_raises(self):
+        import urllib3
+        from requests.exceptions import ConnectTimeout, ConnectionError as RequestsConnectionError
+
+        refused = urllib3.exceptions.MaxRetryError(
+            None, "/", reason=urllib3.exceptions.NewConnectionError(None, "refused")
+        )
+        unprocessed = [
+            ("429", self._response(429, headers={"Retry-After": "1"})),
+            ("connect timeout", ConnectTimeout("never sent")),
+            ("connection refused", RequestsConnectionError(refused)),
+        ]
+        for label, failure in unprocessed:
+            with self.subTest(previous=label):
+                with patch('requests.Session.request') as mock_request:
+                    mock_request.side_effect = [failure, self._response(404)]
+                    with patch('alegra.retry.time.sleep'):
+                        with self.assertRaises(alegra.AlegraNotFoundError):
+                            self._client().query("delete", self.URL + "/1")
+
+                self.assertEqual(mock_request.call_count, 2)
+
+    def test_delete_404_after_ambiguous_failure_is_treated_as_already_deleted(self):
+        import urllib3
+        from requests.exceptions import ConnectionError as RequestsConnectionError
+        from requests.exceptions import ReadTimeout
+
+        ambiguous = [
+            ("read timeout", ReadTimeout("maybe processed")),
+            ("protocol error", RequestsConnectionError(
+                urllib3.exceptions.ProtocolError("Connection aborted."))),
+            ("503", self._response(503)),
+        ]
+        for label, failure in ambiguous:
+            with self.subTest(previous=label):
+                with patch('requests.Session.request') as mock_request:
+                    mock_request.side_effect = [failure, self._response(404)]
+                    with patch('alegra.retry.time.sleep'):
+                        result = self._client().query("delete", self.URL + "/1")
+
+                self.assertEqual(result, {})
+                self.assertEqual(mock_request.call_count, 2)
+
     def test_delete_first_attempt_404_still_raises(self):
         with patch('requests.Session.request') as mock_request:
             mock_request.return_value = self._response(404)
