@@ -1,8 +1,8 @@
 site_name: AlegraPy
 site_description: Cliente de Python para consumir la API de Alegra de forma sencilla.
-site_url: https://camilordz1.github.io/alegrapy_pkg/
-repo_url: https://github.com/camilordz1/alegrapy_pkg
-repo_name: camilordz1/alegrapy_pkg
+site_url: https://camilordz1.github.io/alegrapy/
+repo_url: https://github.com/camilordz1/alegrapy
+repo_name: camilordz1/alegrapy
 
 theme:
   name: material

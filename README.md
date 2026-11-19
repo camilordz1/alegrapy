@@ -1,6 +1,6 @@
 # AlegraPy
 
-[![Tests](https://github.com/camilordz1/alegrapy_pkg/actions/workflows/tests.yml/badge.svg)](https://github.com/camilordz1/alegrapy_pkg/actions/workflows/tests.yml)
+[![Tests](https://github.com/camilordz1/alegrapy/actions/workflows/tests.yml/badge.svg)](https://github.com/camilordz1/alegrapy/actions/workflows/tests.yml)
 
 Cliente de Python para la API de [Alegra](https://www.alegra.com/) (facturación y contabilidad).
 Permite trabajar con varias empresas a la vez, maneja errores y reintentos de forma segura y
@@ -9,7 +9,7 @@ evita facturas duplicadas por reintentos ciegos.
 > **Proyecto no oficial.** AlegraPy es una librería comunitaria, sin relación con Alegra.
 > La referencia oficial de la API está en <https://developer.alegra.com/>.
 
-**Documentación completa:** <https://camilordz1.github.io/alegrapy_pkg/>
+**Documentación completa:** <https://camilordz1.github.io/alegrapy/>
 
 ## Inicio rápido
 
@@ -17,7 +17,7 @@ evita facturas duplicadas por reintentos ciegos.
    anterior a estas funciones):
 
    ```bash
-   pip install git+https://github.com/camilordz1/alegrapy_pkg.git
+   pip install git+https://github.com/camilordz1/alegrapy.git
    ```
 
 2. Obtén tus credenciales en Alegra: **Configuración → API - Integraciones con otros sistemas**
@@ -40,12 +40,12 @@ Probado en Python 3.10, 3.11, 3.12 y 3.13.
 
 | Necesidad | Cómo se resuelve | Guía |
 |---|---|---|
-| Varias empresas en el mismo proceso | Un `AlegraClient` por empresa; se puede compartir entre hilos sin mezclar credenciales | [Concurrencia](https://camilordz1.github.io/alegrapy_pkg/guias/concurrencia/) |
-| Distinguir el tipo de error | Excepciones tipadas: `AlegraNotFoundError`, `AlegraAuthError`, `AlegraRateLimitError`, `AlegraServerError`, `AlegraTimeoutError`... Todas heredan de `AlegraAPIError` | [Errores](https://camilordz1.github.io/alegrapy_pkg/guias/errores/) |
-| Fallas transitorias | Reintentos automáticos con backoff y `Retry-After`; un `POST` solo se reintenta si la petición seguro no salió | [Reintentos](https://camilordz1.github.io/alegrapy_pkg/guias/reintentos/) |
-| Recorrer todos los registros | `iter_all()` pagina sola, sin cargar todo en memoria | [Paginación](https://camilordz1.github.io/alegrapy_pkg/guias/paginacion/) |
-| Buscar por NIT o SKU | `contacts.find_by_identification()` e `items.find_by_reference()` con coincidencia exacta | [Búsquedas](https://camilordz1.github.io/alegrapy_pkg/guias/busquedas/) |
-| Conexiones seguras | HTTPS obligatorio, IDs validados y logs sin cuerpos ni tokens | [Seguridad](https://camilordz1.github.io/alegrapy_pkg/guias/seguridad/) |
+| Varias empresas en el mismo proceso | Un `AlegraClient` por empresa; se puede compartir entre hilos sin mezclar credenciales | [Concurrencia](https://camilordz1.github.io/alegrapy/guias/concurrencia/) |
+| Distinguir el tipo de error | Excepciones tipadas: `AlegraNotFoundError`, `AlegraAuthError`, `AlegraRateLimitError`, `AlegraServerError`, `AlegraTimeoutError`... Todas heredan de `AlegraAPIError` | [Errores](https://camilordz1.github.io/alegrapy/guias/errores/) |
+| Fallas transitorias | Reintentos automáticos con backoff y `Retry-After`; un `POST` solo se reintenta si la petición seguro no salió | [Reintentos](https://camilordz1.github.io/alegrapy/guias/reintentos/) |
+| Recorrer todos los registros | `iter_all()` pagina sola, sin cargar todo en memoria | [Paginación](https://camilordz1.github.io/alegrapy/guias/paginacion/) |
+| Buscar por NIT o SKU | `contacts.find_by_identification()` e `items.find_by_reference()` con coincidencia exacta | [Búsquedas](https://camilordz1.github.io/alegrapy/guias/busquedas/) |
+| Conexiones seguras | HTTPS obligatorio, IDs validados y logs sin cuerpos ni tokens | [Seguridad](https://camilordz1.github.io/alegrapy/guias/seguridad/) |
 
 ## Ejemplos
 
@@ -122,13 +122,13 @@ ofrece una cuarentena serializable; ver
 | Usuarios | `client.users` | `self_info` |
 
 Todos tienen `list`, `read`, `create`, `update`, `delete` e `iter_all`. El detalle está en la
-[guía de recursos](https://camilordz1.github.io/alegrapy_pkg/guias/recursos/).
+[guía de recursos](https://camilordz1.github.io/alegrapy/guias/recursos/).
 
 ## Modo legacy
 
 El estilo antiguo con la sesión global (`from alegra import session`) sigue disponible, pero
 comparte credenciales en todo el proceso: no lo uses con varias empresas. Ver
-[Migración desde el modo legacy](https://camilordz1.github.io/alegrapy_pkg/guias/migracion-legacy/).
+[Migración desde el modo legacy](https://camilordz1.github.io/alegrapy/guias/migracion-legacy/).
 
 ## Desarrollo
 
