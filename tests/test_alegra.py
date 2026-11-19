@@ -7,8 +7,8 @@ import sys
 
 import requests
 
-import alegra
-from alegra import session, contacts, invoices, payments, items, AlegraClient, AlegraAPIError
+import alegrapy
+from alegrapy import session, contacts, invoices, payments, items, AlegraClient, AlegraAPIError
 
 class _IntLike:
     """Minimal stand-in for integral types such as numpy.int64."""
@@ -40,12 +40,12 @@ class TestAlegraPy(unittest.TestCase):
         session.token = None
         session.url = "https://api.alegra.com/api/v1/"
         session.timeout = 30
-        from alegra import RetryPolicy
+        from alegrapy import RetryPolicy
         session.retry = RetryPolicy(max_retries=0)
 
         # The legacy class shadows the module on the package, so reach the module itself
         # to reset the global default client's credentials.
-        default_client = sys.modules['alegra.session'].default_client
+        default_client = sys.modules['alegrapy.session'].default_client
         default_client._user = None
         default_client._token = None
         default_client._retry = None
@@ -756,9 +756,9 @@ class TestTypedExceptions(unittest.TestCase):
         session.token = None
         session.url = "https://api.alegra.com/api/v1/"
         session.timeout = 30
-        from alegra import RetryPolicy
+        from alegrapy import RetryPolicy
         session.retry = RetryPolicy(max_retries=0)
-        default_client = sys.modules['alegra.session'].default_client
+        default_client = sys.modules['alegrapy.session'].default_client
         default_client._user = None
         default_client._token = None
         default_client._retry = None
@@ -787,7 +787,7 @@ class TestTypedExceptions(unittest.TestCase):
         return ctx.exception
 
     def test_status_codes_map_to_typed_errors(self):
-        from alegra import (AlegraAuthError, AlegraNotFoundError, AlegraValidationError,
+        from alegrapy import (AlegraAuthError, AlegraNotFoundError, AlegraValidationError,
                             AlegraRateLimitError, AlegraServerError)
         expected = {
             400: AlegraValidationError,
@@ -806,7 +806,7 @@ class TestTypedExceptions(unittest.TestCase):
                 self.assertIs(type(error), cls)
 
     def test_typed_errors_subclass_base_and_keep_attributes(self):
-        from alegra import AlegraNotFoundError
+        from alegrapy import AlegraNotFoundError
         error = self._error_for_response(self._response(404))
 
         self.assertIsInstance(error, AlegraAPIError)
@@ -816,7 +816,7 @@ class TestTypedExceptions(unittest.TestCase):
         self.assertEqual(str(error), "boom")
 
     def test_connect_timeout_is_a_connection_error(self):
-        from alegra import AlegraConnectionError
+        from alegrapy import AlegraConnectionError
         from requests.exceptions import ConnectTimeout
 
         original = ConnectTimeout("connection timed out before sending")
@@ -828,7 +828,7 @@ class TestTypedExceptions(unittest.TestCase):
         self.assertIsNone(error.response_body)
 
     def test_read_timeout_is_a_timeout_error(self):
-        from alegra import AlegraTimeoutError
+        from alegrapy import AlegraTimeoutError
         from requests.exceptions import ReadTimeout
 
         original = ReadTimeout("waiting for the response timed out")
@@ -839,7 +839,7 @@ class TestTypedExceptions(unittest.TestCase):
         self.assertIsNone(error.status_code)
 
     def test_connection_error_is_a_connection_error(self):
-        from alegra import AlegraConnectionError
+        from alegrapy import AlegraConnectionError
         from requests.exceptions import ConnectionError as RequestsConnectionError
 
         original = RequestsConnectionError("dns failure")
@@ -924,7 +924,7 @@ class TestTypedExceptions(unittest.TestCase):
 
     @patch('requests.Session.request')
     def test_legacy_path_raises_typed_errors(self, mock_request):
-        from alegra import AlegraNotFoundError
+        from alegrapy import AlegraNotFoundError
 
         mock_request.return_value = self._response(404)
         session.user = "legacy_user@example.com"
@@ -973,7 +973,7 @@ class TestTypedExceptions(unittest.TestCase):
             self.assertEqual(client.contacts.read(1), {"response_text": "plain text answer"})
 
     def test_error_with_non_dict_json_uses_generic_message(self):
-        from alegra import AlegraRateLimitError
+        from alegrapy import AlegraRateLimitError
 
         response = self._response(429)
         response.text = '["rate limited"]'
@@ -986,7 +986,7 @@ class TestTypedExceptions(unittest.TestCase):
         self.assertEqual(error.response_body, '["rate limited"]')
 
     def test_error_without_message_uses_generic_message(self):
-        from alegra import AlegraValidationError
+        from alegrapy import AlegraValidationError
 
         response = self._response(400)
         response.text = '{"errors": "invalid"}'
@@ -998,7 +998,7 @@ class TestTypedExceptions(unittest.TestCase):
         self.assertEqual(str(error), "API error (Status 400)")
 
     def test_error_with_non_json_body_uses_body_as_message(self):
-        from alegra import AlegraServerError
+        from alegrapy import AlegraServerError
 
         response = self._response(503)
         response.text = "upstream unavailable"
@@ -1010,14 +1010,14 @@ class TestTypedExceptions(unittest.TestCase):
         self.assertEqual(str(error), "upstream unavailable")
 
     def test_public_imports(self):
-        from alegra import AlegraNotFoundError
-        from alegra.exceptions import AlegraAPIError as ModuleError
-        from alegra.session import AlegraAPIError as LegacyImport
+        from alegrapy import AlegraNotFoundError
+        from alegrapy.exceptions import AlegraAPIError as ModuleError
+        from alegrapy.session import AlegraAPIError as LegacyImport
 
         self.assertIs(ModuleError, AlegraAPIError)
         self.assertIs(LegacyImport, AlegraAPIError)
         self.assertTrue(issubclass(AlegraNotFoundError, AlegraAPIError))
-        self.assertIn("AlegraNotFoundError", alegra.__all__)
+        self.assertIn("AlegraNotFoundError", alegrapy.__all__)
 
 
 class TestRetries(unittest.TestCase):
@@ -1031,7 +1031,7 @@ class TestRetries(unittest.TestCase):
         session.url = "https://api.alegra.com/api/v1/"
         session.timeout = 30
         session.retry = None
-        default_client = sys.modules['alegra.session'].default_client
+        default_client = sys.modules['alegrapy.session'].default_client
         default_client._user = None
         default_client._token = None
         default_client._retry = None
@@ -1052,7 +1052,7 @@ class TestRetries(unittest.TestCase):
 
     @staticmethod
     def _policy(**kwargs):
-        from alegra import RetryPolicy
+        from alegrapy import RetryPolicy
         return RetryPolicy(**kwargs)
 
     def _client(self, retry=None):
@@ -1067,7 +1067,7 @@ class TestRetries(unittest.TestCase):
     def test_get_retries_503_then_succeeds(self):
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = [self._response(503), self._response(200, '{"id": 1}')]
-            with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
                 result = self._get(self._client())
 
         self.assertEqual(result, {"id": 1})
@@ -1080,7 +1080,7 @@ class TestRetries(unittest.TestCase):
                 self._response(429, headers={"Retry-After": "3"}),
                 self._response(200, '{"id": 1}'),
             ]
-            with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
                 result = self._get(self._client())
 
         self.assertEqual(result, {"id": 1})
@@ -1092,7 +1092,7 @@ class TestRetries(unittest.TestCase):
                 self._response(429, headers={"X-Rate-Limit-Reset": "12"}),
                 self._response(200, '{"id": 1}'),
             ]
-            with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
                 self._get(self._client())
 
         mock_sleep.assert_called_once_with(12.0)
@@ -1102,7 +1102,7 @@ class TestRetries(unittest.TestCase):
 
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = [ReadTimeout("slow"), self._response(200, '{"id": 1}')]
-            with patch('alegra.retry.time.sleep'):
+            with patch('alegrapy.retry.time.sleep'):
                 result = self._get(self._client())
 
         self.assertEqual(result, {"id": 1})
@@ -1115,21 +1115,21 @@ class TestRetries(unittest.TestCase):
                      RequestsConnectionError("third")]
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = list(originals)
-            with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
                 with self.assertRaises(AlegraAPIError) as ctx:
                     self._get(self._client())
 
         self.assertEqual(mock_request.call_count, 3)
         self.assertEqual(mock_sleep.call_count, 2)
-        self.assertIs(type(ctx.exception), alegra.AlegraConnectionError)
+        self.assertIs(type(ctx.exception), alegrapy.AlegraConnectionError)
         self.assertIs(ctx.exception.__cause__, originals[-1])
 
     def test_max_retries_zero_makes_one_attempt(self):
         policy = self._policy(max_retries=0)
         with patch('requests.Session.request') as mock_request:
             mock_request.return_value = self._response(503)
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraServerError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraServerError):
                     self._get(self._client(retry=policy))
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1138,8 +1138,8 @@ class TestRetries(unittest.TestCase):
     def test_post_503_is_not_retried(self):
         with patch('requests.Session.request') as mock_request:
             mock_request.return_value = self._response(503)
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraServerError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraServerError):
                     self._post(self._client())
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1150,8 +1150,8 @@ class TestRetries(unittest.TestCase):
 
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = ReadTimeout("maybe created")
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraTimeoutError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraTimeoutError):
                     self._post(self._client())
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1164,8 +1164,8 @@ class TestRetries(unittest.TestCase):
         original = RequestsConnectionError(urllib3.exceptions.ProtocolError("Connection aborted."))
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = original
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraConnectionError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraConnectionError):
                     self._post(self._client())
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1176,7 +1176,7 @@ class TestRetries(unittest.TestCase):
 
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = [ConnectTimeout("never sent"), self._response(201, '{"id": 2}')]
-            with patch('alegra.retry.time.sleep'):
+            with patch('alegrapy.retry.time.sleep'):
                 result = self._post(self._client())
 
         self.assertEqual(result, {"id": 2})
@@ -1192,7 +1192,7 @@ class TestRetries(unittest.TestCase):
         original = RequestsConnectionError(refused)
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = [original, self._response(201, '{"id": 2}')]
-            with patch('alegra.retry.time.sleep'):
+            with patch('alegrapy.retry.time.sleep'):
                 result = self._post(self._client())
 
         self.assertEqual(result, {"id": 2})
@@ -1204,7 +1204,7 @@ class TestRetries(unittest.TestCase):
                 self._response(429, headers={"Retry-After": "1"}),
                 self._response(201, '{"id": 2}'),
             ]
-            with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
                 result = self._post(self._client())
 
         self.assertEqual(result, {"id": 2})
@@ -1213,8 +1213,8 @@ class TestRetries(unittest.TestCase):
     def test_requests_with_files_are_never_retried(self):
         with patch('requests.Session.request') as mock_request:
             mock_request.return_value = self._response(503)
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraServerError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraServerError):
                     self._client().query("get", self.URL, files={"file": ("a.txt", b"x")})
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1227,8 +1227,8 @@ class TestRetries(unittest.TestCase):
                 self._response(429, headers={"Retry-After": "10"}),
                 self._response(200, '{"id": 1}'),
             ]
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraRateLimitError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraRateLimitError):
                     self._get(self._client(retry=policy))
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1242,8 +1242,8 @@ class TestRetries(unittest.TestCase):
                 self._response(503),
                 self._response(200, '{"id": 1}'),
             ]
-            with patch('alegra.retry.random.uniform', return_value=0.25) as mock_uniform:
-                with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.random.uniform', return_value=0.25) as mock_uniform:
+                with patch('alegrapy.retry.time.sleep') as mock_sleep:
                     result = self._get(self._client(retry=policy))
 
         self.assertEqual(result, {"id": 1})
@@ -1264,7 +1264,7 @@ class TestRetries(unittest.TestCase):
             with self.subTest(status=label):
                 with patch('requests.Session.request') as mock_request:
                     mock_request.return_value = response
-                    with patch('alegra.retry.time.sleep') as mock_sleep:
+                    with patch('alegrapy.retry.time.sleep') as mock_sleep:
                         with self.assertRaises(AlegraAPIError):
                             self._get(self._client())
                 self.assertEqual(mock_request.call_count, 1)
@@ -1272,7 +1272,7 @@ class TestRetries(unittest.TestCase):
 
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = requests.exceptions.SSLError("bad certificate")
-            with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
                 with self.assertRaises(AlegraAPIError):
                     self._get(self._client())
         self.assertEqual(mock_request.call_count, 1)
@@ -1282,7 +1282,7 @@ class TestRetries(unittest.TestCase):
         original = TypeError("Object of type Decimal is not JSON serializable")
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = original
-            with patch('alegra.retry.time.sleep') as mock_sleep:
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
                 with self.assertRaises(TypeError) as ctx:
                     self._post(self._client())
 
@@ -1293,7 +1293,7 @@ class TestRetries(unittest.TestCase):
     def test_retry_warning_has_no_query_string(self):
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = [self._response(503), self._response(200, '{"id": 1}')]
-            with patch('alegra.retry.time.sleep'):
+            with patch('alegrapy.retry.time.sleep'):
                 with self.assertLogs("alegra", level="WARNING") as logs:
                     self._client().query("get", self.URL, params={"email": "pii@example.com"})
 
@@ -1310,7 +1310,7 @@ class TestRetries(unittest.TestCase):
         from http.client import RemoteDisconnected
         from requests.exceptions import (ConnectTimeout, ConnectionError as RequestsConnectionError,
                                          ReadTimeout, SSLError)
-        from alegra.retry import _was_not_sent
+        from alegrapy.retry import _was_not_sent
 
         refused = urllib3.exceptions.MaxRetryError(
             None, "/", reason=urllib3.exceptions.NewConnectionError(None, "refused")
@@ -1337,7 +1337,7 @@ class TestRetries(unittest.TestCase):
             with self.subTest(first=label):
                 with patch('requests.Session.request') as mock_request:
                     mock_request.side_effect = responses
-                    with patch('alegra.retry.time.sleep'):
+                    with patch('alegrapy.retry.time.sleep'):
                         result = self._client().query("delete", self.URL + "/1")
 
                 self.assertEqual(result, {})
@@ -1359,8 +1359,8 @@ class TestRetries(unittest.TestCase):
             with self.subTest(previous=label):
                 with patch('requests.Session.request') as mock_request:
                     mock_request.side_effect = [failure, self._response(404)]
-                    with patch('alegra.retry.time.sleep'):
-                        with self.assertRaises(alegra.AlegraNotFoundError):
+                    with patch('alegrapy.retry.time.sleep'):
+                        with self.assertRaises(alegrapy.AlegraNotFoundError):
                             self._client().query("delete", self.URL + "/1")
 
                 self.assertEqual(mock_request.call_count, 2)
@@ -1380,7 +1380,7 @@ class TestRetries(unittest.TestCase):
             with self.subTest(previous=label):
                 with patch('requests.Session.request') as mock_request:
                     mock_request.side_effect = [failure, self._response(404)]
-                    with patch('alegra.retry.time.sleep'):
+                    with patch('alegrapy.retry.time.sleep'):
                         result = self._client().query("delete", self.URL + "/1")
 
                 self.assertEqual(result, {})
@@ -1396,7 +1396,7 @@ class TestRetries(unittest.TestCase):
                 self._response(429, headers={"Retry-After": "1"}),
                 self._response(404),
             ]
-            with patch('alegra.retry.time.sleep'):
+            with patch('alegrapy.retry.time.sleep'):
                 result = self._client(retry=policy).query("delete", self.URL + "/1")
 
         self.assertEqual(result, {})
@@ -1412,8 +1412,8 @@ class TestRetries(unittest.TestCase):
                 ConnectTimeout("never sent"),
                 self._response(404),
             ]
-            with patch('alegra.retry.time.sleep'):
-                with self.assertRaises(alegra.AlegraNotFoundError):
+            with patch('alegrapy.retry.time.sleep'):
+                with self.assertRaises(alegrapy.AlegraNotFoundError):
                     self._client(retry=policy).query("delete", self.URL + "/1")
 
         self.assertEqual(mock_request.call_count, 3)
@@ -1421,8 +1421,8 @@ class TestRetries(unittest.TestCase):
     def test_delete_first_attempt_404_still_raises(self):
         with patch('requests.Session.request') as mock_request:
             mock_request.return_value = self._response(404)
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraNotFoundError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraNotFoundError):
                     self._client().query("delete", self.URL + "/1")
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1433,8 +1433,8 @@ class TestRetries(unittest.TestCase):
 
         with patch('requests.Session.request') as mock_request:
             mock_request.side_effect = [ReadTimeout("slow"), self._response(404)]
-            with patch('alegra.retry.time.sleep'):
-                with self.assertRaises(alegra.AlegraNotFoundError):
+            with patch('alegrapy.retry.time.sleep'):
+                with self.assertRaises(alegrapy.AlegraNotFoundError):
                     self._get(self._client())
 
         self.assertEqual(mock_request.call_count, 2)
@@ -1446,8 +1446,8 @@ class TestRetries(unittest.TestCase):
                 self._response(429, headers={"Retry-After": "1"}),
                 self._response(201, '{"id": 2}'),
             ]
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraRateLimitError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraRateLimitError):
                     self._post(self._client(retry=policy))
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1460,8 +1460,8 @@ class TestRetries(unittest.TestCase):
                 self._response(429, headers={"Retry-After": "1"}),
                 self._response(200, '{"id": 1}'),
             ]
-            with patch('alegra.retry.time.sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraRateLimitError):
+            with patch('alegrapy.retry.time.sleep') as mock_sleep:
+                with self.assertRaises(alegrapy.AlegraRateLimitError):
                     self._get(self._client(retry=policy))
 
         self.assertEqual(mock_request.call_count, 1)
@@ -1475,8 +1475,8 @@ class TestRetries(unittest.TestCase):
                         self._response(429, headers={"X-Rate-Limit-Reset": header}),
                         self._response(200, '{"id": 1}'),
                     ]
-                    with patch('alegra.retry.random.uniform', return_value=0.25) as mock_uniform:
-                        with patch('alegra.retry.time.sleep') as mock_sleep:
+                    with patch('alegrapy.retry.random.uniform', return_value=0.25) as mock_uniform:
+                        with patch('alegrapy.retry.time.sleep') as mock_sleep:
                             result = self._get(self._client())
 
                 self.assertEqual(result, {"id": 1})
@@ -1520,9 +1520,9 @@ class TestRetries(unittest.TestCase):
         self.assertIs(AlegraClient(retry=own).retry, own)
 
     def test_retry_policy_is_exported(self):
-        from alegra import RetryPolicy
-        self.assertIs(alegra.RetryPolicy, RetryPolicy)
-        self.assertIn("RetryPolicy", alegra.__all__)
+        from alegrapy import RetryPolicy
+        self.assertIs(alegrapy.RetryPolicy, RetryPolicy)
+        self.assertIn("RetryPolicy", alegrapy.__all__)
 
 
 class TestIterAll(unittest.TestCase):
@@ -1632,7 +1632,7 @@ class TestIterAll(unittest.TestCase):
     def test_non_list_page_raises_api_error(self):
         client = self._client([{"data": [], "metadata": {}}])
 
-        with self.assertRaises(alegra.AlegraAPIError) as ctx:
+        with self.assertRaises(alegrapy.AlegraAPIError) as ctx:
             list(client.items.iter_all())
 
         self.assertIn("paginating", str(ctx.exception))
@@ -1662,12 +1662,12 @@ class TestIterAll(unittest.TestCase):
         self.assertEqual(self.query.call_count, 1)
 
     def test_error_on_later_page_propagates_unchanged(self):
-        error = alegra.AlegraNotFoundError("gone", status_code=404)
+        error = alegrapy.AlegraNotFoundError("gone", status_code=404)
         client = self._client([self._records(0, 30), error])
 
         iterator = client.items.iter_all()
         next(iterator)
-        with self.assertRaises(alegra.AlegraNotFoundError) as ctx:
+        with self.assertRaises(alegrapy.AlegraNotFoundError) as ctx:
             for _ in iterator:
                 pass
 
@@ -1678,8 +1678,8 @@ class TestIterAll(unittest.TestCase):
         self.assertTrue(callable(client.items.iter_all))
         self.assertTrue(callable(client.invoices.iter_all))
 
-        default_client = sys.modules['alegra.session'].default_client
-        from alegra import items as legacy_items
+        default_client = sys.modules['alegrapy.session'].default_client
+        from alegrapy import items as legacy_items
 
         with patch.object(default_client, 'query', return_value=[{"id": 7}]) as mock_query:
             self.assertEqual(list(legacy_items().iter_all()), [{"id": 7}])
@@ -1863,7 +1863,7 @@ class TestSearchHelpers(unittest.TestCase):
         self.assertEqual(params['reference'], "SKU")
 
     def test_helpers_are_reachable_from_legacy_modules(self):
-        default_client = sys.modules['alegra.session'].default_client
+        default_client = sys.modules['alegrapy.session'].default_client
 
         with patch.object(default_client, 'query',
                           return_value=[{"id": 1, "identification": "1"}]) as mock_query:

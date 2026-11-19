@@ -17,13 +17,24 @@ pip install AlegraPy
 Verifica la instalación:
 
 ```python
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 print(AlegraClient)
 ```
 
+## Nombre del import
+
+La distribución se llama **`AlegraPy`**, pero el paquete se importa como **`alegrapy`**:
+
+```python
+import alegrapy
+```
+
+El antiguo `import alegra` sigue funcionando como alias de compatibilidad: emite un
+`DeprecationWarning` y se eliminará en la versión 1.0.
+
 !!! note "Versión de Python"
-    El archivo `setup.py` del paquete no declara una versión mínima de Python. Los clasificadores del paquete indican Python 3.
+    El paquete requiere Python 3.10 o superior (`requires-python` en `pyproject.toml`).
 
 ## Instalación desde el código fuente
 

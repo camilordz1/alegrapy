@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
-from alegra import AlegraClient, RetryPolicy
+from alegrapy import AlegraClient, RetryPolicy
 
 
 class _EchoAuthHandler(BaseHTTPRequestHandler):

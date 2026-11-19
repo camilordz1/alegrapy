@@ -77,7 +77,7 @@ incluye cuerpos de respuesta, query strings ni credenciales.
 ## Configurar o desactivar
 
 ```python
-from alegra import AlegraClient, RetryPolicy
+from alegrapy import AlegraClient, RetryPolicy
 
 client = AlegraClient(
     user="tu_usuario@dominio.com",
@@ -92,7 +92,7 @@ client.retry = RetryPolicy(max_retries=0)
 En el modo legacy, el cliente global usa `session.retry`:
 
 ```python
-from alegra import RetryPolicy, session
+from alegrapy import RetryPolicy, session
 
 session.retry = RetryPolicy(max_retries=0)
 ```
@@ -103,7 +103,7 @@ Si se agotan los reintentos, se lanza el error de la última tentativa, con su c
 ## Ejemplo: sincronización por tenant
 
 ```python
-from alegra import AlegraClient, RetryPolicy, AlegraNotFoundError, AlegraServerError
+from alegrapy import AlegraClient, RetryPolicy, AlegraNotFoundError, AlegraServerError
 
 client = AlegraClient(
     user=tenant.alegra_user,

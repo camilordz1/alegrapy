@@ -1,9 +1,9 @@
 import enum
 from typing import Any, Dict, Optional, Union
 
-from alegra._create_once import (contains_marker, marker_for, validate_dedup_key,
+from alegrapy._create_once import (contains_marker, marker_for, validate_dedup_key,
                                  validate_lookup_pages)
-from alegra.actions import Actions, validate_id
+from alegrapy.actions import Actions, validate_id
 
 
 class CreditNoteType(str, enum.Enum):

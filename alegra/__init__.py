@@ -1,79 +1,38 @@
-from alegra.session import AlegraClient, AlegraAPIError, session
-from alegra.retry import RetryPolicy
-from alegra.dedup import make_dedup_key, make_dedup_key_from
-from alegra.credit_notes import (CreditNotes, credit_notes, CreditNoteType,
-                                 CreditNoteOperationType)
-from alegra.exceptions import (
-    AlegraAuthError,
-    AlegraNotFoundError,
-    AlegraValidationError,
-    AlegraRateLimitError,
-    AlegraServerError,
-    AlegraConnectionError,
-    AlegraTimeoutError,
-    AlegraFileNotAvailableError,
-    AlegraStampError,
-    AlegraAlreadyAnnulledError,
-    AlegraUnverifiedCreateError,
+"""Deprecated compatibility shim for the old ``alegra`` import name.
+
+Use ``import alegrapy`` instead. This package only re-exports the real package and
+registers identical submodule objects; it will be removed in 1.0.
+"""
+import importlib
+import pkgutil
+import sys
+import warnings
+
+warnings.warn(
+    "The 'alegra' import name is deprecated; use 'import alegrapy'. "
+    "It will be removed in 1.0.",
+    DeprecationWarning,
+    stacklevel=2,
 )
-from alegra.actions import Actions, actions
-from alegra.invoices import Invoices, invoices
-from alegra.contacts import Contacts, contacts
-from alegra.payments import Payments, payments
-from alegra.items import Items, items
-from alegra.estimates import Estimates, estimates
-from alegra.purchase_orders import PurchaseOrders, purchase_orders
-from alegra.bank_accounts import BankAccounts, bank_accounts
-from alegra.taxes import Taxes, taxes
-from alegra.currencies import Currencies, currencies
-from alegra.retentions import Retentions, retentions
-from alegra.users import Users, users
 
-__all__ = [
-    'AlegraClient',
-    'AlegraAPIError',
-    'AlegraAuthError',
-    'AlegraNotFoundError',
-    'AlegraValidationError',
-    'AlegraRateLimitError',
-    'AlegraServerError',
-    'AlegraConnectionError',
-    'AlegraTimeoutError',
-    'AlegraFileNotAvailableError',
-    'AlegraStampError',
-    'AlegraAlreadyAnnulledError',
-    'AlegraUnverifiedCreateError',
-    'RetryPolicy',
-    'make_dedup_key',
-    'make_dedup_key_from',
-    'CreditNotes',
-    'credit_notes',
-    'CreditNoteType',
-    'CreditNoteOperationType',
-    'session',
-    'Actions',
-    'actions',
-    'Invoices',
-    'invoices',
-    'Contacts',
-    'contacts',
-    'Payments',
-    'payments',
-    'Items',
-    'items',
-    'Estimates',
-    'estimates',
-    'PurchaseOrders',
-    'purchase_orders',
-    'BankAccounts',
-    'bank_accounts',
-    'Taxes',
-    'taxes',
-    'Currencies',
-    'currencies',
-    'Retentions',
-    'retentions',
-    'Users',
-    'users',
-]
+import alegrapy as _alegrapy  # noqa: E402
+from alegrapy import *  # noqa: F401,F403,E402
+from alegrapy import __all__ as _ALEGRAPY_ALL  # noqa: E402
 
+__all__ = list(_ALEGRAPY_ALL)
+
+# Expose the same module objects under the old package name, so isinstance checks,
+# monkeypatching and ``from alegra.<module> import ...`` behave identically.
+for _module_info in pkgutil.iter_modules(_alegrapy.__path__):
+    _short_name = _module_info.name
+    if _short_name.startswith("_"):
+        continue
+    _module = importlib.import_module(f"alegrapy.{_short_name}")
+    sys.modules[f"{__name__}.{_short_name}"] = _module
+
+# Keep the legacy class/alias attributes (``alegra.session``, ``alegra.invoices``, ...)
+# pointing at what ``alegrapy`` exposes today, not at the submodule objects.
+for _name in _ALEGRAPY_ALL:
+    setattr(sys.modules[__name__], _name, getattr(_alegrapy, _name))
+
+del _module_info, _module, _short_name, _name

@@ -1,10 +1,10 @@
 from typing import Optional
-from alegra.actions import Actions
+from alegrapy.actions import Actions
 
 
-class Retentions(Actions):
-    """Operations related to retentions (retenciones) endpoint."""
-    endpoint: str = "retentions"
+class Currencies(Actions):
+    """Operations related to currencies (monedas/divisas) endpoint."""
+    endpoint: str = "currencies"
 
     def __init__(self, client: Optional['AlegraClient'] = None) -> None:
         """Initialize the resource.
@@ -16,5 +16,5 @@ class Retentions(Actions):
 
 
 # For backward compatibility
-retentions = Retentions
+currencies = Currencies
 

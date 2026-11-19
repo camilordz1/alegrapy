@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlsplit, urlunsplit
 import requests
 
-from alegra.exceptions import (AlegraAPIError, AlegraNotFoundError, _error_for_exception,
+from alegrapy.exceptions import (AlegraAPIError, AlegraNotFoundError, _error_for_exception,
                                _error_for_status)
-from alegra.retry import (RetryPolicy, _may_have_been_processed, _retry_delay, _should_retry,
+from alegrapy.retry import (RetryPolicy, _may_have_been_processed, _retry_delay, _should_retry,
                           _sleep)
 
 # Create a dedicated logger for the library, allowing applications to configure it
@@ -125,7 +125,7 @@ class AlegraClient:
     def contacts(self) -> 'Contacts':
         """Access Contacts resource operations."""
         if not hasattr(self, '_contacts'):
-            from alegra.contacts import Contacts
+            from alegrapy.contacts import Contacts
             self._contacts = Contacts(self)
         return self._contacts
 
@@ -133,7 +133,7 @@ class AlegraClient:
     def invoices(self) -> 'Invoices':
         """Access Invoices resource operations."""
         if not hasattr(self, '_invoices'):
-            from alegra.invoices import Invoices
+            from alegrapy.invoices import Invoices
             self._invoices = Invoices(self)
         return self._invoices
 
@@ -141,7 +141,7 @@ class AlegraClient:
     def credit_notes(self) -> 'CreditNotes':
         """Access Credit Notes resource operations."""
         if not hasattr(self, '_credit_notes'):
-            from alegra.credit_notes import CreditNotes
+            from alegrapy.credit_notes import CreditNotes
             self._credit_notes = CreditNotes(self)
         return self._credit_notes
 
@@ -149,7 +149,7 @@ class AlegraClient:
     def payments(self) -> 'Payments':
         """Access Payments resource operations."""
         if not hasattr(self, '_payments'):
-            from alegra.payments import Payments
+            from alegrapy.payments import Payments
             self._payments = Payments(self)
         return self._payments
 
@@ -157,7 +157,7 @@ class AlegraClient:
     def items(self) -> 'Items':
         """Access Items resource operations."""
         if not hasattr(self, '_items'):
-            from alegra.items import Items
+            from alegrapy.items import Items
             self._items = Items(self)
         return self._items
 
@@ -165,7 +165,7 @@ class AlegraClient:
     def estimates(self) -> 'Estimates':
         """Access Estimates resource operations."""
         if not hasattr(self, '_estimates'):
-            from alegra.estimates import Estimates
+            from alegrapy.estimates import Estimates
             self._estimates = Estimates(self)
         return self._estimates
 
@@ -173,7 +173,7 @@ class AlegraClient:
     def purchase_orders(self) -> 'PurchaseOrders':
         """Access Purchase Orders resource operations."""
         if not hasattr(self, '_purchase_orders'):
-            from alegra.purchase_orders import PurchaseOrders
+            from alegrapy.purchase_orders import PurchaseOrders
             self._purchase_orders = PurchaseOrders(self)
         return self._purchase_orders
 
@@ -181,7 +181,7 @@ class AlegraClient:
     def bank_accounts(self) -> 'BankAccounts':
         """Access Bank Accounts resource operations."""
         if not hasattr(self, '_bank_accounts'):
-            from alegra.bank_accounts import BankAccounts
+            from alegrapy.bank_accounts import BankAccounts
             self._bank_accounts = BankAccounts(self)
         return self._bank_accounts
 
@@ -189,7 +189,7 @@ class AlegraClient:
     def taxes(self) -> 'Taxes':
         """Access Taxes resource operations."""
         if not hasattr(self, '_taxes'):
-            from alegra.taxes import Taxes
+            from alegrapy.taxes import Taxes
             self._taxes = Taxes(self)
         return self._taxes
 
@@ -197,7 +197,7 @@ class AlegraClient:
     def currencies(self) -> 'Currencies':
         """Access Currencies resource operations."""
         if not hasattr(self, '_currencies'):
-            from alegra.currencies import Currencies
+            from alegrapy.currencies import Currencies
             self._currencies = Currencies(self)
         return self._currencies
 
@@ -205,7 +205,7 @@ class AlegraClient:
     def retentions(self) -> 'Retentions':
         """Access Retentions resource operations."""
         if not hasattr(self, '_retentions'):
-            from alegra.retentions import Retentions
+            from alegrapy.retentions import Retentions
             self._retentions = Retentions(self)
         return self._retentions
 
@@ -213,7 +213,7 @@ class AlegraClient:
     def users(self) -> 'Users':
         """Access Users resource operations."""
         if not hasattr(self, '_users'):
-            from alegra.users import Users
+            from alegrapy.users import Users
             self._users = Users(self)
         return self._users
 

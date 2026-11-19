@@ -1,4 +1,4 @@
-from alegra import AlegraClient, session, users, estimates, bank_accounts
+from alegrapy import AlegraClient, session, users, estimates, bank_accounts
 from decouple import config
 
 if __name__ == '__main__':

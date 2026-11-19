@@ -2,12 +2,24 @@
 
 AlegraPy conserva el estilo anterior (credenciales globales y clases en minúscula) por compatibilidad. Para código nuevo se recomienda `AlegraClient`.
 
+## Nombre del import
+
+El paquete se importa como `alegrapy`; el antiguo `alegra` sigue disponible como alias de
+compatibilidad con un `DeprecationWarning`:
+
+```python
+from alegrapy import AlegraClient
+
+# Sigue funcionando, pero emite un aviso y se eliminará en 1.0:
+from alegra import AlegraClient
+```
+
 ## Comparación
 
 === "Recomendado: AlegraClient"
 
     ```python
-    from alegra import AlegraClient
+    from alegrapy import AlegraClient
 
     client = AlegraClient(user="tu_usuario@dominio.com", token="tu_token_api")
 
@@ -18,7 +30,7 @@ AlegraPy conserva el estilo anterior (credenciales globales y clases en minúscu
 === "Legacy"
 
     ```python
-    from alegra import session, invoices, contacts
+    from alegrapy import session, invoices, contacts
 
     session.user = "tu_usuario@dominio.com"
     session.token = "tu_token_api"

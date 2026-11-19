@@ -15,13 +15,13 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
-from alegra._create_once import (contains_marker, marker_for, payload_with_marker,
+from alegrapy._create_once import (contains_marker, marker_for, payload_with_marker,
                                  run_create_once, validate_dedup_key,
                                  validate_lookup_pages, validate_verify_window)
-from alegra.actions import Actions, validate_id
-from alegra.credit_notes import CreditNoteOperationType, CreditNoteType
-from alegra.dedup import make_dedup_key
-from alegra.exceptions import (AlegraAPIError, AlegraAlreadyAnnulledError,
+from alegrapy.actions import Actions, validate_id
+from alegrapy.credit_notes import CreditNoteOperationType, CreditNoteType
+from alegrapy.dedup import make_dedup_key
+from alegrapy.exceptions import (AlegraAPIError, AlegraAlreadyAnnulledError,
                                AlegraFileNotAvailableError, AlegraStampError,
                                AlegraTimeoutError, _error_for_exception,
                                _error_for_status)

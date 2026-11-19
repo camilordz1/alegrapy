@@ -10,9 +10,9 @@ import re
 import time
 from typing import Any, Callable, Dict, Optional
 
-from alegra.exceptions import (AlegraAlreadyAnnulledError, AlegraAPIError, AlegraStampError,
+from alegrapy.exceptions import (AlegraAlreadyAnnulledError, AlegraAPIError, AlegraStampError,
                                AlegraUnverifiedCreateError)
-from alegra.retry import _may_have_been_processed
+from alegrapy.retry import _may_have_been_processed
 
 logger = logging.getLogger("alegra")
 

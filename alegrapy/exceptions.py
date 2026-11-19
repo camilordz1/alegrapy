@@ -12,7 +12,7 @@ from typing import Any, Dict, Mapping, Optional
 import requests
 import urllib3
 
-from alegra.dedup import _json_safe
+from alegrapy.dedup import _json_safe
 
 
 class AlegraAPIError(Exception):

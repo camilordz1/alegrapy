@@ -1,0 +1,87 @@
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("AlegraPy")
+except PackageNotFoundError:  # running from a source checkout without installed metadata
+    __version__ = "0.1.0"
+
+from alegrapy.session import AlegraClient, AlegraAPIError, session
+from alegrapy.retry import RetryPolicy
+from alegrapy.dedup import make_dedup_key, make_dedup_key_from
+from alegrapy.credit_notes import (CreditNotes, credit_notes, CreditNoteType,
+                                 CreditNoteOperationType)
+from alegrapy.exceptions import (
+    AlegraAuthError,
+    AlegraNotFoundError,
+    AlegraValidationError,
+    AlegraRateLimitError,
+    AlegraServerError,
+    AlegraConnectionError,
+    AlegraTimeoutError,
+    AlegraFileNotAvailableError,
+    AlegraStampError,
+    AlegraAlreadyAnnulledError,
+    AlegraUnverifiedCreateError,
+)
+from alegrapy.actions import Actions, actions
+from alegrapy.invoices import Invoices, invoices
+from alegrapy.contacts import Contacts, contacts
+from alegrapy.payments import Payments, payments
+from alegrapy.items import Items, items
+from alegrapy.estimates import Estimates, estimates
+from alegrapy.purchase_orders import PurchaseOrders, purchase_orders
+from alegrapy.bank_accounts import BankAccounts, bank_accounts
+from alegrapy.taxes import Taxes, taxes
+from alegrapy.currencies import Currencies, currencies
+from alegrapy.retentions import Retentions, retentions
+from alegrapy.users import Users, users
+
+__all__ = [
+    '__version__',
+    'AlegraClient',
+    'AlegraAPIError',
+    'AlegraAuthError',
+    'AlegraNotFoundError',
+    'AlegraValidationError',
+    'AlegraRateLimitError',
+    'AlegraServerError',
+    'AlegraConnectionError',
+    'AlegraTimeoutError',
+    'AlegraFileNotAvailableError',
+    'AlegraStampError',
+    'AlegraAlreadyAnnulledError',
+    'AlegraUnverifiedCreateError',
+    'RetryPolicy',
+    'make_dedup_key',
+    'make_dedup_key_from',
+    'CreditNotes',
+    'credit_notes',
+    'CreditNoteType',
+    'CreditNoteOperationType',
+    'session',
+    'Actions',
+    'actions',
+    'Invoices',
+    'invoices',
+    'Contacts',
+    'contacts',
+    'Payments',
+    'payments',
+    'Items',
+    'items',
+    'Estimates',
+    'estimates',
+    'PurchaseOrders',
+    'purchase_orders',
+    'BankAccounts',
+    'bank_accounts',
+    'Taxes',
+    'taxes',
+    'Currencies',
+    'currencies',
+    'Retentions',
+    'retentions',
+    'Users',
+    'users',
+]
+

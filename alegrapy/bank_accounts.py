@@ -1,5 +1,5 @@
 from typing import Any, Dict, Optional, Union
-from alegra.actions import Actions
+from alegrapy.actions import Actions
 
 
 class BankAccounts(Actions):

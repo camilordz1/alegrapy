@@ -4,26 +4,26 @@ Jerarquía de errores de la librería. Todas las clases heredan de `AlegraAPIErr
 `except AlegraAPIError` captura cualquier fallo de la API o del transporte. Ver también la guía de
 [errores](../guias/errores.md).
 
-::: alegra.exceptions.AlegraAPIError
+::: alegrapy.exceptions.AlegraAPIError
 
-::: alegra.exceptions.AlegraAuthError
+::: alegrapy.exceptions.AlegraAuthError
 
-::: alegra.exceptions.AlegraNotFoundError
+::: alegrapy.exceptions.AlegraNotFoundError
 
-::: alegra.exceptions.AlegraValidationError
+::: alegrapy.exceptions.AlegraValidationError
 
-::: alegra.exceptions.AlegraRateLimitError
+::: alegrapy.exceptions.AlegraRateLimitError
 
-::: alegra.exceptions.AlegraServerError
+::: alegrapy.exceptions.AlegraServerError
 
-::: alegra.exceptions.AlegraConnectionError
+::: alegrapy.exceptions.AlegraConnectionError
 
-::: alegra.exceptions.AlegraTimeoutError
+::: alegrapy.exceptions.AlegraTimeoutError
 
-::: alegra.exceptions.AlegraFileNotAvailableError
+::: alegrapy.exceptions.AlegraFileNotAvailableError
 
-::: alegra.exceptions.AlegraStampError
+::: alegrapy.exceptions.AlegraStampError
 
-::: alegra.exceptions.AlegraAlreadyAnnulledError
+::: alegrapy.exceptions.AlegraAlreadyAnnulledError
 
-::: alegra.exceptions.AlegraUnverifiedCreateError
+::: alegrapy.exceptions.AlegraUnverifiedCreateError

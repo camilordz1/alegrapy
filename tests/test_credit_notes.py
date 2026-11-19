@@ -5,12 +5,12 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
-import alegra
-from alegra import AlegraClient
+import alegrapy
+from alegrapy import AlegraClient
 
 # Patch module objects directly: `alegra.<resource>` names are shadowed by legacy aliases.
-_FLOW_TIME = importlib.import_module('alegra._create_once').time
-_INVOICES_MODULE = importlib.import_module('alegra.invoices')
+_FLOW_TIME = importlib.import_module('alegrapy._create_once').time
+_INVOICES_MODULE = importlib.import_module('alegrapy.invoices')
 
 INVOICE = {
     "id": 11742,
@@ -78,26 +78,26 @@ class TestCreditNotes(unittest.TestCase):
                 if call[0].lower() == 'get' and '/credit-notes' in call[1]]
 
     def test_resource_is_exported_and_reachable(self):
-        self.assertIsInstance(self.client.credit_notes, alegra.CreditNotes)
+        self.assertIsInstance(self.client.credit_notes, alegrapy.CreditNotes)
         self.assertEqual(self.client.credit_notes.endpoint, "credit-notes")
-        self.assertIs(alegra.credit_notes, alegra.CreditNotes)
-        self.assertEqual(alegra.credit_notes().endpoint, "credit-notes")
-        self.assertIn("CreditNotes", alegra.__all__)
-        self.assertIn("credit_notes", alegra.__all__)
+        self.assertIs(alegrapy.credit_notes, alegrapy.CreditNotes)
+        self.assertEqual(alegrapy.credit_notes().endpoint, "credit-notes")
+        self.assertIn("CreditNotes", alegrapy.__all__)
+        self.assertIn("credit_notes", alegrapy.__all__)
 
     def test_catalog_constants_match_the_api(self):
-        self.assertEqual(alegra.CreditNoteType.PARTIALL_DEVOLUTION.value, "PARTIALL_DEVOLUTION")
-        self.assertEqual(alegra.CreditNoteType.VOID_ELECTRONIC_INVOICE.value,
+        self.assertEqual(alegrapy.CreditNoteType.PARTIALL_DEVOLUTION.value, "PARTIALL_DEVOLUTION")
+        self.assertEqual(alegrapy.CreditNoteType.VOID_ELECTRONIC_INVOICE.value,
                          "VOID_ELECTRONIC_INVOICE")
-        self.assertEqual(alegra.CreditNoteType.REDUCTION_DISCOUNT_PARTIAL_TOTAL.value,
+        self.assertEqual(alegrapy.CreditNoteType.REDUCTION_DISCOUNT_PARTIAL_TOTAL.value,
                          "REDUCTION_DISCOUNT_PARTIAL_TOTAL")
-        self.assertEqual(alegra.CreditNoteType.PRICE_ADJUSTMENT.value, "PRICE_ADJUSTMENT")
-        self.assertEqual(alegra.CreditNoteType.OTHER.value, "OTHER")
+        self.assertEqual(alegrapy.CreditNoteType.PRICE_ADJUSTMENT.value, "PRICE_ADJUSTMENT")
+        self.assertEqual(alegrapy.CreditNoteType.OTHER.value, "OTHER")
         self.assertEqual(
-            alegra.CreditNoteOperationType.REFERENCE_TO_ELECTRONIC_INVOICE.value,
+            alegrapy.CreditNoteOperationType.REFERENCE_TO_ELECTRONIC_INVOICE.value,
             "REFERENCE_TO_ELECTRONIC_INVOICE")
         self.assertEqual(
-            alegra.CreditNoteOperationType.NO_REFERENCE_TO_ELECTRONIC_INVOICE.value,
+            alegrapy.CreditNoteOperationType.NO_REFERENCE_TO_ELECTRONIC_INVOICE.value,
             "NO_REFERENCE_TO_ELECTRONIC_INVOICE")
 
     def test_annul_builds_the_credit_note_payload(self):
@@ -160,7 +160,7 @@ class TestCreditNotes(unittest.TestCase):
                 self.assertEqual(self.calls, [])
 
     def test_operation_type_accepts_enum_and_raw_string(self):
-        for operation in (alegra.CreditNoteOperationType.NO_REFERENCE_TO_ELECTRONIC_INVOICE,
+        for operation in (alegrapy.CreditNoteOperationType.NO_REFERENCE_TO_ELECTRONIC_INVOICE,
                           "NO_REFERENCE_TO_ELECTRONIC_INVOICE"):
             with self.subTest(operation=operation):
                 self.calls = []
@@ -183,7 +183,7 @@ class TestCreditNotes(unittest.TestCase):
     def test_annul_verifies_ambiguous_post(self):
         existing = {"id": 902, "observations": MARKER, "stamp": STAMPED}
         self.note_pages = [[], [existing]]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503)]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
@@ -198,7 +198,7 @@ class TestCreditNotes(unittest.TestCase):
                      "stamp": {"legalStatus": None}}
         self.note_pages = [[unstamped]]
 
-        with self.assertRaises(alegra.AlegraStampError) as ctx:
+        with self.assertRaises(alegrapy.AlegraStampError) as ctx:
             self.client.invoices.annul(11742, "motivo")
 
         self.assertEqual(ctx.exception.document["id"], 950)
@@ -217,31 +217,31 @@ class TestCreditNotes(unittest.TestCase):
         # initial read, guard before POST 1, guard before POST 2 (now annulled)
         self.invoice_states = [self.invoice, self.invoice, annulled]
         self.note_pages = [[], [], []]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503)]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.annul(11742, "motivo", verify_window=0)
 
-        self.assertIsInstance(ctx.exception.__cause__, alegra.AlegraAlreadyAnnulledError)
+        self.assertIsInstance(ctx.exception.__cause__, alegrapy.AlegraAlreadyAnnulledError)
         self.assertEqual(ctx.exception.dedup_key, "annul:11742")
         self.assertEqual(len(self._post_calls()), 1)
 
     def test_retry_guard_failure_after_ambiguous_post_is_quarantined(self):
         paid = dict(self.invoice, status="closed", balance=0, totalPaid=21008.4)
-        for label, third_read in (("read fails", alegra.AlegraTimeoutError("slow")),
+        for label, third_read in (("read fails", alegrapy.AlegraTimeoutError("slow")),
                                   ("status changed", paid)):
             with self.subTest(guard=label):
                 self.calls = []
                 # initial read, guard before POST 1, guard before POST 2
                 self.invoice_states = [self.invoice, self.invoice, third_read]
                 self.note_pages = [[], []]
-                self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+                self.posts = [alegrapy.AlegraServerError("boom", status_code=503)]
 
                 with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
                     with patch.object(_FLOW_TIME, 'sleep'):
-                        with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                        with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                             self.client.invoices.annul(11742, "motivo", verify_window=0)
 
                 self.assertEqual(ctx.exception.attempts, 1)
@@ -251,12 +251,12 @@ class TestCreditNotes(unittest.TestCase):
 
     def test_annul_unverified_raises_with_credit_note_resource(self):
         self.note_pages = [[], [], []]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503),
-                      alegra.AlegraServerError("boom", status_code=503)]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503),
+                      alegrapy.AlegraServerError("boom", status_code=503)]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.annul(11742, "motivo", verify_window=0)
 
         self.assertEqual(ctx.exception.resource, "credit-notes")
@@ -271,12 +271,12 @@ class TestCreditNotes(unittest.TestCase):
             "invoices": [{"id": 11742, "amount": 21008.4}],
         }
         body = json.dumps({"message": "stamp failed", "creditNote": created})
-        error = alegra.AlegraValidationError("stamp failed", status_code=400,
+        error = alegrapy.AlegraValidationError("stamp failed", status_code=400,
                                              response_body=body)
         self.note_pages = [[]]
         self.posts = [error]
 
-        with self.assertRaises(alegra.AlegraStampError) as ctx:
+        with self.assertRaises(alegrapy.AlegraStampError) as ctx:
             self.client.invoices.annul(11742, "motivo")
 
         self.assertEqual(ctx.exception.document, created)
@@ -285,12 +285,12 @@ class TestCreditNotes(unittest.TestCase):
         self.assertEqual(len(self._note_gets()), 1)
 
     def test_plain_400_is_raised_unchanged(self):
-        error = alegra.AlegraValidationError(
+        error = alegrapy.AlegraValidationError(
             "invalid", status_code=400, response_body='{"message": "invalid"}')
         self.note_pages = [[]]
         self.posts = [error]
 
-        with self.assertRaises(alegra.AlegraValidationError) as ctx:
+        with self.assertRaises(alegrapy.AlegraValidationError) as ctx:
             self.client.invoices.annul(11742, "motivo")
 
         self.assertIs(ctx.exception, error)
@@ -299,11 +299,11 @@ class TestCreditNotes(unittest.TestCase):
     def test_invoice_echo_400_is_not_misread_as_stamp_error(self):
         body = json.dumps({"message": "bad",
                            "invoice": {"id": 11742, "status": "open", "total": 1}})
-        error = alegra.AlegraValidationError("bad", status_code=400, response_body=body)
+        error = alegrapy.AlegraValidationError("bad", status_code=400, response_body=body)
         self.note_pages = [[]]
         self.posts = [error]
 
-        with self.assertRaises(alegra.AlegraValidationError) as ctx:
+        with self.assertRaises(alegrapy.AlegraValidationError) as ctx:
             self.client.invoices.annul(11742, "motivo")
 
         self.assertIs(ctx.exception, error)
@@ -312,11 +312,11 @@ class TestCreditNotes(unittest.TestCase):
         other = {"id": 904, "creditNoteOperationType": "REFERENCE_TO_ELECTRONIC_INVOICE",
                  "invoices": [{"id": 999, "amount": 1}]}
         body = json.dumps({"message": "bad", "creditNote": other})
-        error = alegra.AlegraValidationError("bad", status_code=400, response_body=body)
+        error = alegrapy.AlegraValidationError("bad", status_code=400, response_body=body)
         self.note_pages = [[]]
         self.posts = [error]
 
-        with self.assertRaises(alegra.AlegraValidationError) as ctx:
+        with self.assertRaises(alegrapy.AlegraValidationError) as ctx:
             self.client.invoices.annul(11742, "motivo")
 
         self.assertIs(ctx.exception, error)
@@ -340,7 +340,7 @@ class TestCreditNotes(unittest.TestCase):
         self.invoice = self._closed_invoice()
         self.note_pages = [[]]
 
-        with self.assertRaises(alegra.AlegraAlreadyAnnulledError) as ctx:
+        with self.assertRaises(alegrapy.AlegraAlreadyAnnulledError) as ctx:
             self.client.invoices.annul(11742, "motivo")
 
         self.assertEqual(ctx.exception.invoice_id, 11742)
@@ -351,7 +351,7 @@ class TestCreditNotes(unittest.TestCase):
         self.invoice_states = [copy.deepcopy(INVOICE), copy.deepcopy(INVOICE),
                                self._closed_invoice()]
         self.note_pages = [[], [], [existing]]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503)]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
@@ -364,15 +364,15 @@ class TestCreditNotes(unittest.TestCase):
         self.invoice_states = [copy.deepcopy(INVOICE), copy.deepcopy(INVOICE),
                                self._closed_invoice()]
         self.note_pages = [[], [], []]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503)]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
                 # Our own ambiguous first POST most likely annulled it: quarantine
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.annul(11742, "motivo", verify_window=0)
 
-        self.assertIsInstance(ctx.exception.__cause__, alegra.AlegraAlreadyAnnulledError)
+        self.assertIsInstance(ctx.exception.__cause__, alegrapy.AlegraAlreadyAnnulledError)
         self.assertEqual(len(self._post_calls()), 1)
 
     def test_annul_rejects_paid_closed_invoice(self):
@@ -390,15 +390,15 @@ class TestCreditNotes(unittest.TestCase):
     def test_stamp_error_on_second_post_is_raised_unchanged(self):
         created = {"id": 905, "creditNoteOperationType": "REFERENCE_TO_ELECTRONIC_INVOICE",
                    "invoices": [{"id": 11742, "amount": 1}]}
-        stamp_error = alegra.AlegraStampError("stamp failed", document=created,
+        stamp_error = alegrapy.AlegraStampError("stamp failed", document=created,
                                               status_code=400)
         self.invoice_states = [copy.deepcopy(INVOICE), copy.deepcopy(INVOICE)]
         self.note_pages = [[], []]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503), stamp_error]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503), stamp_error]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraStampError) as ctx:
+                with self.assertRaises(alegrapy.AlegraStampError) as ctx:
                     self.client.invoices.annul(11742, "motivo", verify_window=0)
 
         self.assertIs(ctx.exception, stamp_error)
@@ -433,7 +433,7 @@ class TestCreditNotes(unittest.TestCase):
         self.note_pages = [[]]
         self.posts = [{"id": 906}]
 
-        with patch.object(alegra.CreditNotes, 'reconcile', return_value=None) as reconcile:
+        with patch.object(alegrapy.CreditNotes, 'reconcile', return_value=None) as reconcile:
             self.client.invoices.annul(11742, "motivo", lookup_pages=4)
 
         reconcile.assert_any_call("annul:11742", 126, lookup_pages=4)
@@ -459,11 +459,11 @@ class TestCreditNotes(unittest.TestCase):
 
     def test_annul_on_unverified_raise_makes_one_post(self):
         self.note_pages = [[], []]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503)]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.annul(11742, "motivo", verify_window=0,
                                                on_unverified="raise")
 
@@ -471,14 +471,14 @@ class TestCreditNotes(unittest.TestCase):
         self.assertEqual(len(self._post_calls()), 1)
 
     def test_annul_second_post_rejected_is_quarantined(self):
-        rejection = alegra.AlegraValidationError(
+        rejection = alegrapy.AlegraValidationError(
             "invalid", status_code=400, response_body='{"message": "invalid"}')
         self.note_pages = [[], []]
-        self.posts = [alegra.AlegraServerError("boom", status_code=503), rejection]
+        self.posts = [alegrapy.AlegraServerError("boom", status_code=503), rejection]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
             with patch.object(_FLOW_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.annul(11742, "motivo", verify_window=0)
 
         self.assertEqual(ctx.exception.attempts, 2)

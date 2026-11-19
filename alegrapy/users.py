@@ -1,5 +1,5 @@
 from typing import Any, Optional
-from alegra.actions import Actions
+from alegrapy.actions import Actions
 
 
 class Users(Actions):

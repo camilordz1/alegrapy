@@ -3,7 +3,7 @@ import unittest
 from datetime import date, datetime
 from decimal import Decimal
 
-from alegra import AlegraClient, make_dedup_key, make_dedup_key_from
+from alegrapy import AlegraClient, make_dedup_key, make_dedup_key_from
 
 KEY_PATTERN = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
 

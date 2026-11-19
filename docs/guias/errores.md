@@ -39,7 +39,7 @@ capturando cualquier error de la librería.
 ## Separar "no existe" de "Alegra está caído"
 
 ```python
-from alegra import (
+from alegrapy import (
     AlegraClient,
     AlegraNotFoundError,
     AlegraServerError,
@@ -68,7 +68,7 @@ Si la petición falla antes de obtener respuesta (sin conexión, DNS, timeout, e
 `requests` queda encadenada en `__cause__`:
 
 ```python
-from alegra import AlegraConnectionError, AlegraTimeoutError
+from alegrapy import AlegraConnectionError, AlegraTimeoutError
 
 try:
     client.invoices.list()
@@ -113,7 +113,7 @@ un `Decimal` o un `datetime` que no se puede serializar a JSON lanza `TypeError`
 
 ```python
 from decimal import Decimal
-from alegra import AlegraAPIError
+from alegrapy import AlegraAPIError
 
 try:
     client.invoices.create({"total": Decimal("100.00")})
@@ -145,7 +145,7 @@ except ValueError as e:
 ## Ejemplo completo
 
 ```python
-from alegra import (
+from alegrapy import (
     AlegraAPIError,
     AlegraAuthError,
     AlegraNotFoundError,

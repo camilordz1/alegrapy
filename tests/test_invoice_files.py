@@ -9,12 +9,12 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-import alegra
-from alegra import AlegraClient, invoices as legacy_invoices
+import alegrapy
+from alegrapy import AlegraClient, invoices as legacy_invoices
 
 # `alegra.invoices.time` cannot be patched by dotted string: `alegra.invoices` is shadowed
 # by the legacy class alias, and Python 3.10's mock resolves the dotted path as a module.
-_INVOICES_TIME = importlib.import_module('alegra.invoices').time
+_INVOICES_TIME = importlib.import_module('alegrapy.invoices').time
 
 PDF_URL = "https://cdn.example.com/files/invoice.pdf?Expires=1&Signature=SECRET"
 PDF_URL_2 = "https://cdn.example.com/files/invoice-2.pdf?Expires=2&Signature=SECRET2"
@@ -82,7 +82,7 @@ class TestInvoiceFiles(unittest.TestCase):
             with self.subTest(record=record):
                 self.query.return_value = record
                 with patch('requests.get') as mock_get:
-                    with self.assertRaises(alegra.AlegraFileNotAvailableError):
+                    with self.assertRaises(alegrapy.AlegraFileNotAvailableError):
                         self.client.invoices.get_pdf(42)
                 mock_get.assert_not_called()
 
@@ -92,7 +92,7 @@ class TestInvoiceFiles(unittest.TestCase):
             with self.subTest(url=url):
                 self.query.return_value = {"pdf": url}
                 with patch('requests.get') as mock_get:
-                    with self.assertRaises(alegra.AlegraAPIError):
+                    with self.assertRaises(alegrapy.AlegraAPIError):
                         self.client.invoices.get_pdf(42)
                 mock_get.assert_not_called()
 
@@ -115,7 +115,7 @@ class TestInvoiceFiles(unittest.TestCase):
         responses = [_redirect("http://evil.example/f.pdf")]
 
         with patch('requests.get', side_effect=responses) as mock_get:
-            with self.assertRaises(alegra.AlegraAPIError):
+            with self.assertRaises(alegrapy.AlegraAPIError):
                 self.client.invoices.get_pdf(42)
 
         self.assertEqual(mock_get.call_count, 1)
@@ -125,7 +125,7 @@ class TestInvoiceFiles(unittest.TestCase):
         responses = [_redirect(URL_B), _redirect("http://evil.example/f.pdf", url=URL_B)]
 
         with patch('requests.get', side_effect=responses) as mock_get:
-            with self.assertRaises(alegra.AlegraAPIError):
+            with self.assertRaises(alegrapy.AlegraAPIError):
                 self.client.invoices.get_pdf(42)
 
         self.assertEqual(mock_get.call_count, 2)
@@ -147,7 +147,7 @@ class TestInvoiceFiles(unittest.TestCase):
         responses = [_redirect(URL_B)] * 6
 
         with patch('requests.get', side_effect=responses) as mock_get:
-            with self.assertRaises(alegra.AlegraAPIError) as ctx:
+            with self.assertRaises(alegrapy.AlegraAPIError) as ctx:
                 self.client.invoices.get_pdf(42)
 
         self.assertIn("too many redirects", str(ctx.exception))
@@ -155,13 +155,13 @@ class TestInvoiceFiles(unittest.TestCase):
 
     def test_redirect_without_location_is_rejected(self):
         with patch('requests.get', return_value=_response(status=302, content=b"", headers={})):
-            with self.assertRaises(alegra.AlegraAPIError):
+            with self.assertRaises(alegrapy.AlegraAPIError):
                 self.client.invoices.get_pdf(42)
 
     def test_download_deadline_is_enforced(self):
         with patch.object(_INVOICES_TIME, 'monotonic', side_effect=[0.0, 0.0, 100.0]):
             with patch('requests.get', return_value=_response()):
-                with self.assertRaises(alegra.AlegraTimeoutError):
+                with self.assertRaises(alegrapy.AlegraTimeoutError):
                     self.client.invoices.get_pdf(42, deadline=10)
 
     def test_invalid_deadline_is_rejected_before_any_request(self):
@@ -177,7 +177,7 @@ class TestInvoiceFiles(unittest.TestCase):
     def test_server_error_is_not_retried_with_a_fresh_url(self):
         with patch('requests.get',
                    return_value=_response(status=500, content=b"")) as mock_get:
-            with self.assertRaises(alegra.AlegraServerError):
+            with self.assertRaises(alegrapy.AlegraServerError):
                 self.client.invoices.get_pdf(42)
 
         self.assertEqual(self.query.call_count, 1)
@@ -196,7 +196,7 @@ class TestInvoiceFiles(unittest.TestCase):
         self.query.return_value = {"xml": XML_URL}
         html = b"<html>SECRET-ERROR-PAGE</html>"
         with patch('requests.get', return_value=_response(html, url=XML_URL)):
-            with self.assertRaises(alegra.AlegraAPIError) as ctx:
+            with self.assertRaises(alegrapy.AlegraAPIError) as ctx:
                 self.client.invoices.get_xml(42)
 
         self.assertNotIn("SECRET-ERROR-PAGE", str(ctx.exception))
@@ -218,7 +218,7 @@ class TestInvoiceFiles(unittest.TestCase):
         responses = [_response(status=403, content=b""), _response(status=403, content=b"")]
 
         with patch('requests.get', side_effect=responses) as mock_get:
-            with self.assertRaises(alegra.AlegraAuthError):
+            with self.assertRaises(alegrapy.AlegraAuthError):
                 self.client.invoices.get_pdf(42)
 
         self.assertEqual(mock_get.call_count, 2)
@@ -226,20 +226,20 @@ class TestInvoiceFiles(unittest.TestCase):
     def test_missing_url_on_refresh_raises_file_not_available(self):
         self.query.side_effect = [{"pdf": PDF_URL}, {"pdf": None}]
         with patch('requests.get', return_value=_response(status=404, content=b"")):
-            with self.assertRaises(alegra.AlegraFileNotAvailableError):
+            with self.assertRaises(alegrapy.AlegraFileNotAvailableError):
                 self.client.invoices.get_pdf(42)
 
     def test_wrong_content_is_rejected_without_echoing_it(self):
         html = b"<html>SECRET-ERROR-PAGE</html>"
         with patch('requests.get', return_value=_response(html)):
-            with self.assertRaises(alegra.AlegraAPIError) as ctx:
+            with self.assertRaises(alegrapy.AlegraAPIError) as ctx:
                 self.client.invoices.get_pdf(42)
 
         self.assertNotIn("SECRET-ERROR-PAGE", str(ctx.exception))
 
     def test_size_cap_is_enforced(self):
         with patch('requests.get', return_value=_response(PDF_BYTES)):
-            with self.assertRaises(alegra.AlegraAPIError):
+            with self.assertRaises(alegrapy.AlegraAPIError):
                 self.client.invoices.get_pdf(42, max_bytes=5)
 
     def test_download_writes_atomically_and_returns_path(self):
@@ -316,7 +316,7 @@ class TestInvoiceFiles(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "FE.pdf"
             with patch('requests.get', return_value=_response(b"<html>error</html>")):
-                with self.assertRaises(alegra.AlegraAPIError):
+                with self.assertRaises(alegrapy.AlegraAPIError):
                     self.client.invoices.download_pdf(42, target)
 
             self.assertEqual(list(Path(directory).iterdir()), [])
@@ -328,7 +328,7 @@ class TestInvoiceFiles(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "FE.pdf"
             with patch('requests.get', return_value=response):
-                with self.assertRaises(alegra.AlegraConnectionError):
+                with self.assertRaises(alegrapy.AlegraConnectionError):
                     self.client.invoices.download_pdf(42, target)
 
             self.assertEqual(list(Path(directory).iterdir()), [])
@@ -345,7 +345,7 @@ class TestInvoiceFiles(unittest.TestCase):
         self.assertNotIn("Expires", output)
 
     def test_download_xml_and_legacy_reachability(self):
-        default_client = sys.modules['alegra.session'].default_client
+        default_client = sys.modules['alegrapy.session'].default_client
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "FE.xml"
             with patch.object(default_client, 'query', return_value={"xml": XML_URL}) as query:

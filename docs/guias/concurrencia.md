@@ -23,7 +23,7 @@ escribe nunca.
 Construye los clientes una sola vez, al arrancar, y compártelos entre los hilos de trabajo:
 
 ```python
-from alegra import AlegraClient, RetryPolicy
+from alegrapy import AlegraClient, RetryPolicy
 
 _clients = {
     tenant.id: AlegraClient(
@@ -50,7 +50,7 @@ diccionario.
 Usa el cliente como contexto para liberar las conexiones al terminar:
 
 ```python
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 with AlegraClient(user="...", token="...") as client:
     facturas = client.invoices.list()

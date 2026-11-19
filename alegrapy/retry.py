@@ -13,7 +13,7 @@ from typing import Any, FrozenSet, Optional
 
 import requests
 
-from alegra.exceptions import (AlegraAPIError, AlegraConnectionError, AlegraServerError,
+from alegrapy.exceptions import (AlegraAPIError, AlegraConnectionError, AlegraServerError,
                                AlegraTimeoutError, _was_not_sent)
 
 # Methods whose repetition cannot create a second record on Alegra's side.

@@ -2,6 +2,6 @@
 
 Recurso `client.bank_accounts` (endpoint `bank-accounts`). Agrega transferencias entre cuentas a las operaciones de [Actions](actions.md).
 
-::: alegra.bank_accounts.BankAccounts
+::: alegrapy.bank_accounts.BankAccounts
     options:
       inherited_members: false

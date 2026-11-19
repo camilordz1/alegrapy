@@ -6,7 +6,7 @@ Todos los recursos comparten las mismas operaciones básicas. Los campos de cada
 
 ```python
 import os
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 client = AlegraClient(
     user=os.environ["ALEGRA_USER"],
@@ -111,7 +111,7 @@ client.bank_accounts.transfer(
 ## Manejar errores
 
 ```python
-from alegra import AlegraAPIError
+from alegrapy import AlegraAPIError
 
 try:
     client.contacts.read(999999999)

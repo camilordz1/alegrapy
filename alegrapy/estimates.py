@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
-from alegra.actions import Actions
+from alegrapy.actions import Actions
 
 
 class Estimates(Actions):

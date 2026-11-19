@@ -56,7 +56,7 @@ La nota se arma con:
 | `NO_REFERENCE_TO_ELECTRONIC_INVOICE` | El cliente ya aceptó la factura ante la DIAN. |
 
 ```python
-from alegra import CreditNoteOperationType
+from alegrapy import CreditNoteOperationType
 
 nota = client.invoices.annul(
     11742,
@@ -80,7 +80,7 @@ numéricamente), no envía nada:
   `invoice_id`.
 
 ```python
-from alegra import AlegraAlreadyAnnulledError
+from alegrapy import AlegraAlreadyAnnulledError
 
 try:
     nota = client.invoices.annul(11742, "motivo")
@@ -132,7 +132,7 @@ El SDK solo lo interpreta así cuando el cuerpo contiene una nota real: un objet
 factura. En ese caso lanza `AlegraStampError` y la nota creada queda en `err.document`:
 
 ```python
-from alegra import AlegraStampError
+from alegrapy import AlegraStampError
 
 try:
     nota = client.invoices.annul(11742, "motivo")

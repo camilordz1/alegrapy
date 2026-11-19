@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from alegra.actions import Actions
+from alegrapy.actions import Actions
 
 
 def _reference_value(record: Dict[str, Any]) -> Any:

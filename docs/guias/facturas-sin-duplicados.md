@@ -7,7 +7,7 @@ recibas un error. Reintentar sin más puede emitir una **factura DIAN duplicada*
 `create_once` resuelve ese caso con una clave de deduplicación:
 
 ```python
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 client = AlegraClient(user="tu_usuario@dominio.com", token="tu_token_api")
 
@@ -59,7 +59,7 @@ cabeceras) con `dedup_key`, `client_id`, `resource`, `payload`, `attempts`, `sta
 
 ```python
 import json
-from alegra import AlegraUnverifiedCreateError
+from alegrapy import AlegraUnverifiedCreateError
 
 try:
     factura = client.invoices.create_once(datos, dedup_key=key, on_unverified="raise")
@@ -70,7 +70,7 @@ except AlegraUnverifiedCreateError as err:
 Un worker posterior puede reconciliar sin miedo:
 
 ```python
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 client = AlegraClient(user=..., token=...)
 
@@ -113,7 +113,7 @@ operación de negocio. Hay dos ayudantes puros, sin I/O, que generan claves vál
 ### `make_dedup_key`: cuando tienes un id de negocio
 
 ```python
-from alegra import make_dedup_key
+from alegrapy import make_dedup_key
 
 key = make_dedup_key("order", order.id)                    # "order:1234"
 key = make_dedup_key("payment", operation_id,              # "billing:payment:op-9f2"
@@ -132,7 +132,7 @@ key = make_dedup_key("payment", operation_id,              # "billing:payment:op
 ### `make_dedup_key_from`: cuando no hay id y la unicidad es por contenido
 
 ```python
-from alegra import make_dedup_key_from
+from alegrapy import make_dedup_key_from
 
 key = make_dedup_key_from(
     datos,

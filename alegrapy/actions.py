@@ -3,7 +3,7 @@ import numbers
 import re
 from typing import Any, Dict, Iterator, List, Optional, Union
 
-from alegra.exceptions import AlegraAPIError
+from alegrapy.exceptions import AlegraAPIError
 
 _ID_PATTERN = re.compile(r'[A-Za-z0-9_-]+')
 
@@ -53,7 +53,7 @@ class Actions:
         """Get the client instance for this resource."""
         if self._client is not None:
             return self._client
-        from alegra.session import default_client
+        from alegrapy.session import default_client
         return default_client
 
     @client.setter

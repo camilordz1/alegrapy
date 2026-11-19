@@ -2,6 +2,6 @@
 
 Recurso `client.contacts` (endpoint `contacts`): clientes y proveedores. Usa únicamente las operaciones estándar de [Actions](actions.md).
 
-::: alegra.contacts.Contacts
+::: alegrapy.contacts.Contacts
     options:
       inherited_members: false

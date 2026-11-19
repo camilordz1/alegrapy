@@ -6,26 +6,26 @@ from unittest.mock import patch
 
 import requests
 
-import alegra
+import alegrapy
 
 # `alegra.invoices` is shadowed by the legacy Invoices alias, and Python 3.10's mock.patch
 # resolves dotted strings through attributes, so patch the module's `time` directly
-_INVOICES_TIME = importlib.import_module('alegra.invoices').time
-from alegra import AlegraClient
+_INVOICES_TIME = importlib.import_module('alegrapy.invoices').time
+from alegrapy import AlegraClient
 
 MARKER = "alegrapy:dedup:order-1"
 
 
 def _timeout():
-    return alegra.AlegraTimeoutError("timeout")
+    return alegrapy.AlegraTimeoutError("timeout")
 
 
 def _server_error():
-    return alegra.AlegraServerError("boom", status_code=503)
+    return alegrapy.AlegraServerError("boom", status_code=503)
 
 
 def _not_sent():
-    error = alegra.AlegraConnectionError("connection failed")
+    error = alegrapy.AlegraConnectionError("connection failed")
     error.__cause__ = requests.exceptions.ConnectTimeout("connect timed out")
     return error
 
@@ -140,7 +140,7 @@ class TestCreateOnce(unittest.TestCase):
 
         with patch.object(_INVOICES_TIME, 'monotonic', return_value=0.0):
             with patch.object(_INVOICES_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.create_once(
                         self._params(), "order-1", precheck=False, verify_window=0)
 
@@ -166,7 +166,7 @@ class TestCreateOnce(unittest.TestCase):
 
         with patch.object(_INVOICES_TIME, 'monotonic', return_value=0.0):
             with patch.object(_INVOICES_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.create_once(
                         self._params(), "order-1", precheck=False,
                         verify_window=0, on_unverified="raise")
@@ -197,7 +197,7 @@ class TestCreateOnce(unittest.TestCase):
         from datetime import date, datetime
         from decimal import Decimal
 
-        error = alegra.AlegraUnverifiedCreateError(
+        error = alegrapy.AlegraUnverifiedCreateError(
             "unverified",
             dedup_key="order-1",
             client_id=1,
@@ -224,10 +224,10 @@ class TestCreateOnce(unittest.TestCase):
         self.assertIsInstance(error.payload["day"], date)
 
     def test_lookup_failure_raises_chained_without_second_post(self):
-        lookup_error = alegra.AlegraServerError("lookup", status_code=502)
+        lookup_error = alegrapy.AlegraServerError("lookup", status_code=502)
         self._wire(posts=[_server_error()], lookups=[lookup_error])
 
-        with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+        with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
             self.client.invoices.create_once(
                 self._params(), "order-1", precheck=False, verify_window=10)
 
@@ -249,12 +249,12 @@ class TestCreateOnce(unittest.TestCase):
         self.assertEqual(len(self._posts()), 2)
 
     def test_second_ambiguous_post_then_lookup_failure(self):
-        lookup_error = alegra.AlegraServerError("lookup", status_code=502)
+        lookup_error = alegrapy.AlegraServerError("lookup", status_code=502)
         self._wire(posts=[_timeout(), _timeout()], lookups=[[], lookup_error])
 
         with patch.object(_INVOICES_TIME, 'monotonic', return_value=0.0):
             with patch.object(_INVOICES_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.create_once(
                         self._params(), "order-1", precheck=False, verify_window=0)
 
@@ -284,7 +284,7 @@ class TestCreateOnce(unittest.TestCase):
         with patch('requests.Session.request', side_effect=responses) as mock_request:
             with patch.object(_INVOICES_TIME, 'monotonic', return_value=0.0):
                 with patch.object(_INVOICES_TIME, 'sleep'):
-                    with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                    with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                         client.invoices.create_once(
                             self._params(), "order-1", precheck=False, verify_window=0)
 
@@ -296,10 +296,10 @@ class TestCreateOnce(unittest.TestCase):
         self.assertEqual(ctx.exception.attempts, 2)
 
     def test_post_validation_error_is_raised_unchanged(self):
-        error = alegra.AlegraValidationError("invalid", status_code=400)
+        error = alegrapy.AlegraValidationError("invalid", status_code=400)
         self._wire(posts=[error], lookups=[])
 
-        with self.assertRaises(alegra.AlegraValidationError) as ctx:
+        with self.assertRaises(alegrapy.AlegraValidationError) as ctx:
             self.client.invoices.create_once(self._params(), "order-1", precheck=False)
 
         self.assertIs(ctx.exception, error)
@@ -309,19 +309,19 @@ class TestCreateOnce(unittest.TestCase):
         error = _not_sent()
         self._wire(posts=[error], lookups=[])
 
-        with self.assertRaises(alegra.AlegraConnectionError) as ctx:
+        with self.assertRaises(alegrapy.AlegraConnectionError) as ctx:
             self.client.invoices.create_once(self._params(), "order-1", precheck=False)
 
         self.assertIs(ctx.exception, error)
         self.assertEqual(self._gets(), [])
 
     def test_second_post_rejected_non_ambiguously_is_quarantined(self):
-        rejection = alegra.AlegraValidationError("invalid", status_code=400)
+        rejection = alegrapy.AlegraValidationError("invalid", status_code=400)
         self._wire(posts=[_server_error(), rejection], lookups=[[]])
 
         with patch.object(_INVOICES_TIME, 'monotonic', return_value=0.0):
             with patch.object(_INVOICES_TIME, 'sleep'):
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError) as ctx:
                     self.client.invoices.create_once(
                         self._params(), "order-1", precheck=False, verify_window=0)
 
@@ -355,7 +355,7 @@ class TestCreateOnce(unittest.TestCase):
 
         with patch.object(_INVOICES_TIME, 'monotonic', side_effect=[0.0, 29.0, 40.0]):
             with patch.object(_INVOICES_TIME, 'sleep') as mock_sleep:
-                with self.assertRaises(alegra.AlegraUnverifiedCreateError):
+                with self.assertRaises(alegrapy.AlegraUnverifiedCreateError):
                     self.client.invoices.create_once(
                         self._params(), "order-1", precheck=False,
                         verify_window=30, on_unverified="raise")

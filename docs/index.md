@@ -7,7 +7,7 @@ Para conocer los campos de cada recurso (facturas, contactos, ítems, etc.) cons
 ## Ejemplo mínimo
 
 ```python
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 client = AlegraClient(user="tu_usuario@dominio.com", token="tu_token_api")
 contacto = client.contacts.read(10032)

@@ -27,7 +27,7 @@ evita facturas duplicadas por reintentos ciegos.
 
    ```python
    import os
-   from alegra import AlegraClient
+   from alegrapy import AlegraClient
 
    with AlegraClient(user=os.environ["ALEGRA_USER"], token=os.environ["ALEGRA_TOKEN"]) as client:
        contacto = client.contacts.read(126)
@@ -54,7 +54,7 @@ al terminar) o escribe el código dentro del bloque `with` del inicio rápido:
 
 ```python
 import os
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 client = AlegraClient(user=os.environ["ALEGRA_USER"], token=os.environ["ALEGRA_TOKEN"])
 ```
@@ -75,7 +75,7 @@ contactos = client.contacts.find_by_identification("900.559.088")
 Manejar errores por tipo:
 
 ```python
-from alegra import AlegraNotFoundError, AlegraServerError
+from alegrapy import AlegraNotFoundError, AlegraServerError
 
 try:
     factura = client.invoices.read(11742)
@@ -92,7 +92,7 @@ en Alegra aunque recibas un error. El SDK nunca reintenta ese caso por su cuenta
 a crear, revisa `err.request_not_sent`:
 
 ```python
-from alegra import AlegraAPIError
+from alegrapy import AlegraAPIError
 
 try:
     client.invoices.create(datos)
@@ -127,7 +127,7 @@ Todos tienen `list`, `read`, `create`, `update`, `delete` e `iter_all`. El detal
 
 ## Modo legacy
 
-El estilo antiguo con la sesión global (`from alegra import session`) sigue disponible, pero
+El estilo antiguo con la sesión global (`from alegrapy import session`) sigue disponible, pero
 comparte credenciales en todo el proceso: no lo uses con varias empresas. Ver
 [Migración desde el modo legacy](https://camilordz1.github.io/alegrapy/guias/migracion-legacy/).
 

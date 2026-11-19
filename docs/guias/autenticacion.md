@@ -19,7 +19,7 @@ export ALEGRA_TOKEN="tu_token_api"
 
 ```python
 import os
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 client = AlegraClient(
     user=os.environ["ALEGRA_USER"],
@@ -43,7 +43,7 @@ TOKEN=tu_token_api
 
 ```python
 from decouple import config
-from alegra import AlegraClient
+from alegrapy import AlegraClient
 
 client = AlegraClient(
     user=config("ALEGRA_USER"),
@@ -80,7 +80,7 @@ Las credenciales se resuelven **como un par** `(user, token)`:
 - Si el cliente no define ninguno, se usan las credenciales globales del objeto `session` (modo [legacy](migracion-legacy.md)).
 
 ```python
-from alegra import AlegraClient, session
+from alegrapy import AlegraClient, session
 
 session.user = "global@dominio.com"
 session.token = "token_global"
