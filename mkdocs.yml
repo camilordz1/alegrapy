@@ -55,12 +55,14 @@ nav:
       - Guía rápida: guias/guia-rapida.md
       - Recursos: guias/recursos.md
       - Errores: guias/errores.md
+      - Reintentos: guias/reintentos.md
       - Seguridad: guias/seguridad.md
       - Migración desde el modo legacy: guias/migracion-legacy.md
   - Referencia de la API:
       - Introducción: referencia/index.md
       - Cliente y errores: referencia/session.md
       - Excepciones: referencia/exceptions.md
+      - Reintentos: referencia/retry.md
       - Actions: referencia/actions.md
       - Facturas: referencia/invoices.md
       - Contactos: referencia/contacts.md

@@ -111,6 +111,28 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
     return max(0.0, (target - datetime.now(timezone.utc)).total_seconds())
 
 
+def _parse_reset_seconds(value: Optional[str]) -> Optional[float]:
+    """Parse an ``X-Rate-Limit-Reset`` value (seconds left in the window).
+
+    Negative or unparseable values yield ``None`` so the caller can fall back to backoff.
+
+    Args:
+        value (str, optional): Header value.
+
+    Returns:
+        float, optional: Non-negative seconds, or ``None``.
+    """
+    if value is None:
+        return None
+    try:
+        seconds = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if seconds < 0:
+        return None
+    return seconds
+
+
 def _error_for_status(message: str, status_code: int, response_body: Optional[str],
                       headers: Optional[Mapping[str, Any]] = None) -> AlegraAPIError:
     """Build the most specific error for an HTTP error response.
@@ -130,6 +152,9 @@ def _error_for_status(message: str, status_code: int, response_body: Optional[st
         error_class = _STATUS_ERRORS.get(status_code, AlegraAPIError)
 
     retry_after = _parse_retry_after(headers.get('Retry-After') if headers else None)
+    if retry_after is None and status_code == 429:
+        # Alegra documents X-Rate-Limit-Reset (seconds left), not Retry-After
+        retry_after = _parse_reset_seconds(headers.get('X-Rate-Limit-Reset') if headers else None)
     return error_class(message, status_code=status_code, response_body=response_body,
                        retry_after=retry_after)
 

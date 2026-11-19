@@ -1,4 +1,5 @@
 from alegra.session import AlegraClient, AlegraAPIError, session
+from alegra.retry import RetryPolicy
 from alegra.exceptions import (
     AlegraAuthError,
     AlegraNotFoundError,
@@ -31,6 +32,7 @@ __all__ = [
     'AlegraServerError',
     'AlegraConnectionError',
     'AlegraTimeoutError',
+    'RetryPolicy',
     'session',
     'Actions',
     'actions',

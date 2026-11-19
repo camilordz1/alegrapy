@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 import requests
 
 from alegra.exceptions import (AlegraAPIError, _error_for_exception, _error_for_status)
+from alegra.retry import RetryPolicy, _retry_delay, _should_retry, _sleep
 
 # Create a dedicated logger for the library, allowing applications to configure it
 logger = logging.getLogger("alegra")
@@ -49,7 +50,7 @@ class AlegraClient:
     Allows managing multiple API sessions with different credentials.
     """
     def __init__(self, user: Optional[str] = None, token: Optional[str] = None, url: Optional[str] = None,
-                 timeout: Optional[float] = None) -> None:
+                 timeout: Optional[float] = None, retry: Optional[RetryPolicy] = None) -> None:
         """Initialize the client.
 
         Args:
@@ -58,6 +59,8 @@ class AlegraClient:
             url (str, optional): Custom base API URL. Must use https (http only for loopback hosts).
                 Defaults to 'https://api.alegra.com/api/v1/'.
             timeout (float, optional): Request timeout in seconds. Defaults to the global session timeout (30).
+            retry (RetryPolicy, optional): Retry policy. Defaults to the global session policy
+                (``RetryPolicy()`` when unset).
 
         Raises:
             ValueError: If url is given and is not a valid https (or loopback http) URL.
@@ -67,6 +70,7 @@ class AlegraClient:
         self._url = None
         self.url = url  # validated by the setter
         self._timeout = timeout
+        self._retry = retry
         self.session = requests.Session()
         self.session.headers.update({
             'Accept': 'application/json',
@@ -224,6 +228,20 @@ class AlegraClient:
         """Set the request timeout in seconds."""
         self._timeout = value
 
+    @property
+    def retry(self) -> RetryPolicy:
+        """Get the retry policy (the client's own, else the global session's)."""
+        if self._retry is not None:
+            return self._retry
+        if session.retry is not None:
+            return session.retry
+        return RetryPolicy()
+
+    @retry.setter
+    def retry(self, value: Optional[RetryPolicy]) -> None:
+        """Set the retry policy (``None`` falls back to the global session's)."""
+        self._retry = value
+
     def get_auth_header(self) -> str:
         """Generate the Basic Authorization header string from credentials.
 
@@ -272,14 +290,49 @@ class AlegraClient:
                 (transport errors chain the original exception as ``__cause__``). Typed subclasses
                 are raised for known HTTP statuses and transport failures. Only
                 ``requests.RequestException`` failures are wrapped: other exceptions, such as a
-                payload that cannot be JSON-serialized, propagate unchanged.
+                payload that cannot be JSON-serialized, propagate unchanged. When retries are
+                enabled, the error raised is the one from the last attempt.
             ValueError: If the resolved base URL is not https (or loopback http); nothing is sent.
         """
         # Also covers the legacy global session.url, which is a plain class attribute
         _validate_base_url(self.url)
 
-        # Build headers per request: the shared requests.Session must never carry credentials,
-        # otherwise concurrent requests with different credentials could mix them up
+        headers = self._request_headers(files)
+        policy = self.retry
+        attempt = 0
+
+        while True:
+            try:
+                return self._request_once(method, url, data, params, files, headers)
+            except AlegraAPIError as error:
+                if attempt >= policy.max_retries or not _should_retry(policy, method, files, error):
+                    raise
+                delay = _retry_delay(policy, error, attempt)
+                if delay is None:
+                    raise
+
+                detail = type(error).__name__
+                if error.status_code is not None:
+                    detail = f"{detail} (status {error.status_code})"
+                logger.warning(
+                    f"{method.upper()} - {self._log_path(url)} - retrying in {delay:.2f}s "
+                    f"(attempt {attempt + 1}/{policy.max_retries}, {detail})"
+                )
+                _sleep(delay)
+                attempt += 1
+
+    def _request_headers(self, files: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """Build the headers for one request.
+
+        The shared ``requests.Session`` must never carry credentials, otherwise concurrent
+        requests with different credentials could mix them up.
+
+        Args:
+            files (dict, optional): Files for multipart uploads, if any.
+
+        Returns:
+            dict: Headers to send with the request.
+        """
         headers = {k: v for k, v in self.session.headers.items() if k.lower() != 'authorization'}
         auth_header = self.get_auth_header()
         if auth_header:
@@ -287,7 +340,27 @@ class AlegraClient:
         if files:
             # Let requests determine the Content-Type with boundary for multipart/form-data
             headers.pop('Content-Type', None)
+        return headers
 
+    def _request_once(self, method: str, url: str, data: Optional[Dict[str, Any]],
+                      params: Optional[Dict[str, Any]], files: Optional[Dict[str, Any]],
+                      headers: Dict[str, str]) -> Any:
+        """Send one attempt and translate the response or transport failure.
+
+        Args:
+            method (str): HTTP method.
+            url (str): Full endpoint URL.
+            data (dict, optional): Request body payload.
+            params (dict, optional): Query parameters.
+            files (dict, optional): Files for multipart uploads.
+            headers (dict): Headers built for this request.
+
+        Returns:
+            Any: Parsed JSON response.
+
+        Raises:
+            AlegraAPIError: Typed error for the response status or transport failure.
+        """
         try:
             response = self.session.request(
                 method=method,
@@ -336,6 +409,7 @@ class session:
     token: Optional[str] = None
     url: str = "https://api.alegra.com/api/v1/"
     timeout: float = 30
+    retry: Optional[RetryPolicy] = None
     headers: Dict[str, str] = {'Accept': 'application/json', 'Content-type': 'application/json'}
 
     @classmethod

@@ -81,6 +81,10 @@ El mensaje solo incluye el nombre de la clase del error (por ejemplo
 `HTTP request failed (ConnectTimeout)`), nunca la URL ni los parámetros, que podrían contener
 datos sensibles.
 
+Si la política de [reintentos](reintentos.md) está activa, la excepción que recibes es la de la
+**última tentativa**, con su clase, atributos y `__cause__` intactos. Los reintentos nunca
+envuelven un `POST` ambiguo ni cambian el tipo de error.
+
 !!! warning
     Un timeout en un `POST` es ambiguo: el registro pudo haberse creado. Consulta
     [Seguridad](seguridad.md) antes de reintentar.
