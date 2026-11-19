@@ -1,6 +1,6 @@
 # Recursos disponibles
 
-Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones estándar `list`, `read`, `create`, `update`, `delete` y `add_attachment` (heredadas de la clase base [`Actions`](../referencia/actions.md)); la columna "Métodos extra" lista lo que se agrega a cada uno.
+Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones estándar `list`, `read`, `create`, `update`, `delete`, `iter_all` y `add_attachment` (heredadas de la clase base [`Actions`](../referencia/actions.md)); la columna "Métodos extra" lista lo que se agrega a cada uno. Para recorrer colecciones completas, ver [Paginación](paginacion.md).
 
 | Recurso | Propiedad | Endpoint | Métodos extra |
 |---|---|---|---|

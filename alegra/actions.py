@@ -1,8 +1,13 @@
+import logging
 import numbers
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Union
+
+from alegra.exceptions import AlegraAPIError
 
 _ID_PATTERN = re.compile(r'[A-Za-z0-9_-]+')
+
+logger = logging.getLogger("alegra")
 
 
 def validate_id(id: Union[int, str]) -> Union[int, str]:
@@ -111,6 +116,103 @@ class Actions:
         }
         params.update(kwargs)
         return self.client.query('get', endpoint, params=params)
+
+    def iter_all(self, max_items: Optional[int] = None, page_size: int = 30,
+                 **filters: Any) -> Iterator[Any]:
+        """Iterate over every matching resource, fetching one page at a time.
+
+        Pages are requested lazily with ``start``/``limit`` through :meth:`list`, so the
+        full result is never held in memory. The iteration stops on an empty or short
+        page, when ``max_items`` records have been yielded, or if the API ignores
+        ``start`` (detected when a full page repeats the previous page's first id).
+
+        Offset pagination over a collection that changes while you walk it can skip or
+        repeat records. Ascending ``id`` (the default ordering) is the most stable order
+        for "process everything" jobs.
+
+        Args:
+            max_items (int, optional): Maximum records to yield. ``0`` yields nothing and
+                sends no request.
+            page_size (int): Records per request, between 1 and 30 (default 30).
+            **filters: Query parameters forwarded to :meth:`list`. ``start``, ``limit``
+                and ``metadata`` are rejected because the iterator owns pagination.
+
+        Yields:
+            Any: Each resource, in the order returned by the API.
+
+        Raises:
+            ValueError: If ``page_size``, ``max_items`` or the filters are invalid; no
+                request is sent.
+            AlegraAPIError: If a page does not have the expected list shape, or if any
+                request fails (the original typed error propagates unchanged).
+        """
+        self._validate_iter_all(max_items, page_size, filters)
+        return self._iterate_pages(
+            None if max_items is None else int(max_items),
+            int(page_size),
+            filters,
+        )
+
+    @staticmethod
+    def _validate_iter_all(max_items: Optional[int], page_size: int,
+                           filters: Dict[str, Any]) -> None:
+        """Validate ``iter_all`` arguments before any request is made."""
+        if (isinstance(page_size, bool) or not isinstance(page_size, numbers.Integral)
+                or not 1 <= page_size <= 30):
+            raise ValueError("page_size must be an integer between 1 and 30")
+        if max_items is not None and (isinstance(max_items, bool)
+                                      or not isinstance(max_items, numbers.Integral)
+                                      or max_items < 0):
+            raise ValueError("max_items must be None or a non-negative integer")
+
+        forbidden = {'start', 'limit', 'metadata'} & set(filters)
+        if forbidden:
+            raise ValueError(
+                "iter_all owns pagination and the response shape; remove: "
+                + ", ".join(sorted(forbidden))
+            )
+
+    def _iterate_pages(self, max_items: Optional[int], page_size: int,
+                       filters: Dict[str, Any]) -> Iterator[Any]:
+        """Yield records page by page; state lives only in this generator."""
+        start = 0
+        yielded = 0
+        previous_first_id = None
+        has_previous_page = False
+
+        while True:
+            remaining = page_size if max_items is None else min(page_size, max_items - yielded)
+            if remaining <= 0:
+                return
+
+            page = self.list(start=start, limit=remaining, **filters)
+            if not isinstance(page, list):
+                raise AlegraAPIError(
+                    f"Unexpected response shape while paginating {self.endpoint}"
+                )
+            if not page:
+                return
+
+            first_id = page[0].get('id') if isinstance(page[0], dict) else None
+            if (has_previous_page and first_id is not None
+                    and first_id == previous_first_id and len(page) == remaining):
+                logger.warning(
+                    f"GET - /{self.endpoint} - pagination did not advance at start {start}; stopping"
+                )
+                return
+
+            previous_first_id = first_id
+            has_previous_page = True
+
+            for record in page:
+                yield record
+                yielded += 1
+                if max_items is not None and yielded >= max_items:
+                    return
+
+            if len(page) < remaining:
+                return
+            start += len(page)
 
     def create(self, params: Dict[str, Any], **kwargs: Any) -> Any:
         """Send information to create a new resource in Alegra.

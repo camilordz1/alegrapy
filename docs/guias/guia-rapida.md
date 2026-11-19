@@ -42,6 +42,14 @@ facturas = client.invoices.list(limit=5, order_direction="DESC")
 
 Por defecto la lista se ordena con `order_direction="ASC"` y `order_field="id"`; puedes sobrescribirlos con kwargs. Los nombres y valores de los filtros disponibles para cada recurso están en la [documentación de Alegra](https://developer.alegra.com/).
 
+Para recorrer **todos** los resultados sin escribir el bucle de `start`/`limit`, usa
+[`iter_all`](paginacion.md):
+
+```python
+for contacto in client.contacts.iter_all():
+    ...
+```
+
 ## Crear un registro
 
 `create(params, **kwargs)` envía `params` como cuerpo JSON (`POST`).

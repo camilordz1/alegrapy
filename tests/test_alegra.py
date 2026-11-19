@@ -1493,6 +1493,167 @@ class TestRetries(unittest.TestCase):
         self.assertIn("RetryPolicy", alegra.__all__)
 
 
+class TestIterAll(unittest.TestCase):
+    """iter_all paginates lazily and never loops forever."""
+
+    @staticmethod
+    def _records(start, count):
+        return [{"id": start + index} for index in range(count)]
+
+    def _client(self, pages):
+        client = AlegraClient(user="user", token="token")
+        self.query = MagicMock(side_effect=pages)
+        client.query = self.query
+        return client
+
+    def _page_args(self):
+        return [(call.kwargs['params']['start'], call.kwargs['params']['limit'])
+                for call in self.query.call_args_list]
+
+    def test_default_page_size_walks_every_page(self):
+        client = self._client([
+            self._records(0, 30),
+            self._records(30, 30),
+            self._records(60, 5),
+        ])
+
+        records = list(client.items.iter_all())
+
+        self.assertEqual(len(records), 65)
+        self.assertEqual([record["id"] for record in records[:2]], [0, 1])
+        self.assertEqual(records[-1]["id"], 64)
+        self.assertEqual(self._page_args(), [(0, 30), (30, 30), (60, 30)])
+        self.assertTrue(self.query.call_args_list[0].args[1].endswith("/items"))
+
+    def test_exact_multiple_stops_on_empty_page(self):
+        client = self._client([
+            self._records(0, 30),
+            self._records(30, 30),
+            [],
+        ])
+
+        records = list(client.items.iter_all())
+
+        self.assertEqual(len(records), 60)
+        self.assertEqual(self._page_args(), [(0, 30), (30, 30), (60, 30)])
+
+    def test_max_items_caps_the_last_request(self):
+        client = self._client([
+            self._records(0, 30),
+            self._records(30, 1),
+        ])
+
+        records = list(client.items.iter_all(max_items=31))
+
+        self.assertEqual(len(records), 31)
+        self.assertEqual(self._page_args(), [(0, 30), (30, 1)])
+
+    def test_max_items_zero_sends_no_request(self):
+        client = self._client([])
+
+        self.assertEqual(list(client.items.iter_all(max_items=0)), [])
+        self.query.assert_not_called()
+
+    def test_custom_page_size(self):
+        client = self._client([
+            self._records(0, 10),
+            self._records(10, 10),
+            self._records(20, 5),
+        ])
+
+        records = list(client.items.iter_all(page_size=10))
+
+        self.assertEqual(len(records), 25)
+        self.assertEqual(self._page_args(), [(0, 10), (10, 10), (20, 10)])
+
+    def test_filters_and_ordering_are_forwarded(self):
+        client = self._client([self._records(0, 5)])
+
+        list(client.items.iter_all(status="active", order_direction="DESC"))
+
+        params = self.query.call_args.kwargs['params']
+        self.assertEqual(params['status'], "active")
+        self.assertEqual(params['order_direction'], "DESC")
+        self.assertEqual(params['order_field'], 'id')
+        self.assertEqual(params['start'], 0)
+        self.assertEqual(params['limit'], 30)
+
+    def test_invalid_arguments_raise_before_any_request(self):
+        invalid = [
+            {"page_size": 0},
+            {"page_size": 31},
+            {"page_size": True},
+            {"page_size": "30"},
+            {"max_items": -1},
+            {"max_items": True},
+            {"start": 0},
+            {"limit": 10},
+            {"metadata": True},
+        ]
+        for kwargs in invalid:
+            with self.subTest(**kwargs):
+                client = self._client([])
+                with self.assertRaises(ValueError):
+                    client.items.iter_all(**kwargs)
+                self.query.assert_not_called()
+
+    def test_non_list_page_raises_api_error(self):
+        client = self._client([{"data": [], "metadata": {}}])
+
+        with self.assertRaises(alegra.AlegraAPIError) as ctx:
+            list(client.items.iter_all())
+
+        self.assertIn("paginating", str(ctx.exception))
+        self.assertIn("items", str(ctx.exception))
+
+    def test_repeated_full_page_stops_with_warning(self):
+        client = self._client([
+            self._records(0, 30),
+            self._records(0, 30),
+        ])
+
+        with self.assertLogs("alegra", level="WARNING") as logs:
+            records = list(client.items.iter_all())
+
+        self.assertEqual(len(records), 30)
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("/items", logs.output[0])
+        self.assertEqual(self._page_args(), [(0, 30), (30, 30)])
+
+    def test_generator_is_lazy(self):
+        client = self._client([self._records(0, 30)])
+
+        iterator = client.items.iter_all()
+        first = next(iterator)
+
+        self.assertEqual(first, {"id": 0})
+        self.assertEqual(self.query.call_count, 1)
+
+    def test_error_on_later_page_propagates_unchanged(self):
+        error = alegra.AlegraNotFoundError("gone", status_code=404)
+        client = self._client([self._records(0, 30), error])
+
+        iterator = client.items.iter_all()
+        next(iterator)
+        with self.assertRaises(alegra.AlegraNotFoundError) as ctx:
+            for _ in iterator:
+                pass
+
+        self.assertIs(ctx.exception, error)
+
+    def test_reachable_from_resources_and_legacy_modules(self):
+        client = AlegraClient(user="user", token="token")
+        self.assertTrue(callable(client.items.iter_all))
+        self.assertTrue(callable(client.invoices.iter_all))
+
+        default_client = sys.modules['alegra.session'].default_client
+        from alegra import items as legacy_items
+
+        with patch.object(default_client, 'query', return_value=[{"id": 7}]) as mock_query:
+            self.assertEqual(list(legacy_items().iter_all()), [{"id": 7}])
+        mock_query.assert_called_once()
+
+
 if __name__ == '__main__':
     unittest.main()
 
