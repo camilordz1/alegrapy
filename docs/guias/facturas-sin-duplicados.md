@@ -90,6 +90,77 @@ else:
 Este patrón funciona con una tabla de base de datos, Celery, RQ, un cron o cualquier otra cola:
 el SDK no crea hilos, workers ni colas.
 
+## Cómo elegir la clave
+
+La clave debe ser **estable** (la misma operación produce siempre la misma) y **única** por
+operación de negocio. Hay dos ayudantes puros, sin I/O, que generan claves válidas para
+`create_once`.
+
+### `make_dedup_key`: cuando tienes un id de negocio
+
+```python
+from alegra import make_dedup_key
+
+key = make_dedup_key("order", order.id)                    # "order:1234"
+key = make_dedup_key("payment", operation_id,              # "billing:payment:op-9f2"
+                     namespace="billing")
+```
+
+- Partes: textos (se recortan), enteros (sin `bool`) y `Decimal`; los números se comparan
+  por valor (`1` y `Decimal("1")` son iguales).
+- Forma legible si todas las partes usan solo letras, dígitos, `_`, `.` o `-` y el resultado
+  cabe en 64 caracteres.
+- En otro caso, forma con hash: `"h:"` + 40 caracteres hexadecimales.
+- Los dos puntos son el separador y están prohibidos en las partes legibles, así que
+  `("a:b", "c")` y `("a", "b:c")` no colisionan.
+- `namespace` se antepone como primera parte para separar integraciones distintas.
+
+### `make_dedup_key_from`: cuando no hay id y la unicidad es por contenido
+
+```python
+from alegra import make_dedup_key_from
+
+key = make_dedup_key_from(
+    datos,
+    ["client.id", "items[].id", "items[].quantity", "external_reference"],
+)
+```
+
+- **No hay campos por defecto**: tú eliges la lista. Una ruta mal escrita no pasa en
+  silencio: lanza `ValueError` con la ruta.
+- Un segmento que termina en `[]` recorre cada elemento de una lista
+  (`"items[].id"`, `"items[].quantity"`).
+- Las rutas duplicadas y una lista vacía lanzan `ValueError`.
+- El orden de los elementos proyectados no importa; el orden de otras listas sí.
+- `namespace` opcional (1–20 caracteres de letras, dígitos, `_`, `.`, `-`): entra en el hash y
+  se antepone si cabe en 64 caracteres.
+
+!!! warning "Elige campos realmente únicos"
+    Si seleccionas solo campos que se repiten en ventas legítimas (por ejemplo, un cliente
+    genérico de “consumidor final” con los mismos ítems), el SDK tratará dos ventas distintas
+    como una sola y **la segunda factura no se creará**. Incluye siempre una referencia única
+    de la operación (número de pedido, id de pago, referencia externa) cuando exista.
+
+    Por la misma razón, incluir la fecha o un timestamp suele **romper** la deduplicación:
+    cada payload genera una clave distinta y los reintentos vuelven a crear facturas.
+
+### Canonicalización antes de calcular la clave
+
+| Dato | Regla |
+|---|---|
+| Diccionarios | Claves ordenadas. |
+| Textos | Se recortan espacios al inicio/fin. |
+| Números (`int`, `float`, `Decimal`) | Se comparan por valor, sin exponente ni ceros finales (`21008.4 == 21008.40 == Decimal("21008.400")`, `-0 == 0`). |
+| `bool` | Sigue siendo booleano; nunca se trata como número (`True` ≠ `1`). |
+| Textos numéricos | Siguen siendo textos: `"21008.40"` ≠ `21008.40`. |
+| Listas proyectadas con `[]` | Se ordenan por su JSON canónico; el orden original no importa. |
+| Otras listas | Conservan su orden. |
+| `date` / `datetime` | `isoformat()`. |
+| `None` | `null`. |
+
+El hash incluye la selección de campos (ordenada) y el `namespace`, de modo que dos
+selecciones distintas sobre el mismo payload nunca producen la misma clave.
+
 ## Requisitos y validaciones
 
 - `dedup_key`: texto de 1 a 64 caracteres, solo letras, dígitos, `_`, `.`, `:` y `-`. Se

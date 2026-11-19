@@ -1,5 +1,6 @@
 from alegra.session import AlegraClient, AlegraAPIError, session
 from alegra.retry import RetryPolicy
+from alegra.dedup import make_dedup_key, make_dedup_key_from
 from alegra.exceptions import (
     AlegraAuthError,
     AlegraNotFoundError,
@@ -35,6 +36,8 @@ __all__ = [
     'AlegraTimeoutError',
     'AlegraUnverifiedCreateError',
     'RetryPolicy',
+    'make_dedup_key',
+    'make_dedup_key_from',
     'session',
     'Actions',
     'actions',
