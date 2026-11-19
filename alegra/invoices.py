@@ -127,6 +127,8 @@ class Invoices(Actions):
             using the same key concurrently can both miss the precheck; serialize per
             key. The lookup only covers the newest ``lookup_pages * 30`` invoices of the
             client, and whether ``observations`` reaches the DIAN XML is unverified.
+            ``query()`` itself may repeat a POST only when it provably was not sent
+            (429 or ``request_not_sent``), which cannot create an extra invoice.
 
         Args:
             params (dict): Payload for ``create``; ``params["client"]`` (or
@@ -229,11 +231,26 @@ class Invoices(Actions):
 
     @staticmethod
     def _payload_with_marker(params: Dict[str, Any], key: str) -> Dict[str, Any]:
-        """Build a copy of ``params`` with the dedup marker on its own line."""
+        """Build a copy of ``params`` with the dedup marker on its own line.
+
+        Re-submitting a stored payload is safe: an existing identical marker is kept
+        as-is instead of appended again, and a payload carrying a different dedup key is
+        rejected.
+        """
         payload = copy.deepcopy(params)
         existing = payload.get("observations")
         marker = _marker_for(key)
-        observations = f"{existing}\n{marker}" if existing else marker
+
+        if existing:
+            lines = [line.strip() for line in str(existing).splitlines()]
+            if marker in lines:
+                return payload
+            if any(line.startswith(_MARKER_PREFIX) for line in lines):
+                raise ValueError("observations already contains a different dedup marker")
+            observations = f"{existing}\n{marker}"
+        else:
+            observations = marker
+
         if len(observations) > _MAX_OBSERVATIONS:
             raise ValueError(
                 f"observations would exceed {_MAX_OBSERVATIONS} characters with the dedup marker"

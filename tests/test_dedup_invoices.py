@@ -169,8 +169,57 @@ class TestCreateOnce(unittest.TestCase):
         self.assertEqual(ctx.exception.attempts, 1)
         self.assertEqual(len(self._posts()), 1)
 
+    def test_resubmitting_stored_payload_keeps_one_marker(self):
+        payload = self.client.invoices._payload_with_marker(self._params(), "order-1")
+
+        for _ in range(3):
+            payload = self.client.invoices._payload_with_marker(payload, "order-1")
+
+        lines = [line.strip() for line in payload["observations"].splitlines()]
+        self.assertEqual(sum(1 for line in lines if line == MARKER), 1)
+
+    def test_payload_with_another_marker_is_rejected(self):
+        self._wire(posts=[], lookups=[])
+
+        with self.assertRaises(ValueError):
+            self.client.invoices.create_once(
+                self._params(observations="alegrapy:dedup:other"),
+                "order-1", precheck=False)
+
+        self.assertEqual(self.calls, [])
+
+    def test_to_dict_is_json_safe_without_mutating_payload(self):
+        from datetime import date, datetime
+        from decimal import Decimal
+
+        error = alegra.AlegraUnverifiedCreateError(
+            "unverified",
+            dedup_key="order-1",
+            client_id=1,
+            payload={
+                "price": Decimal("21008.40"),
+                "day": date(2026, 11, 19),
+                "at": datetime(2026, 11, 19, 10, 30),
+                "tags": ("a", "b"),
+                "ids": {3, 1, 2},
+            },
+        )
+
+        data = error.to_dict()
+        json.dumps(data)
+
+        self.assertEqual(data["payload"]["price"], "21008.40")
+        self.assertEqual(data["payload"]["day"], "2026-11-19")
+        self.assertEqual(data["payload"]["at"], "2026-11-19T10:30:00")
+        self.assertEqual(data["payload"]["tags"], ["a", "b"])
+        self.assertEqual(data["payload"]["ids"], [1, 2, 3])
+
+        self.assertIsInstance(error.payload["price"], Decimal)
+        self.assertIsInstance(error.payload["tags"], tuple)
+        self.assertIsInstance(error.payload["day"], date)
+
     def test_lookup_failure_raises_chained_without_second_post(self):
-        lookup_error = _server_error()
+        lookup_error = alegra.AlegraServerError("lookup", status_code=502)
         self._wire(posts=[_server_error()], lookups=[lookup_error])
 
         with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
@@ -181,6 +230,65 @@ class TestCreateOnce(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertEqual(ctx.exception.attempts, 1)
         self.assertEqual(len(self._posts()), 1)
+
+    def test_second_ambiguous_post_then_verification_finds_it(self):
+        invoice = {"id": 12, "observations": MARKER}
+        self._wire(posts=[_timeout(), _timeout()], lookups=[[], [invoice]])
+
+        with patch('alegra.invoices.time.monotonic', return_value=0.0):
+            with patch('alegra.invoices.time.sleep'):
+                result = self.client.invoices.create_once(
+                    self._params(), "order-1", precheck=False, verify_window=0)
+
+        self.assertIs(result, invoice)
+        self.assertEqual(len(self._posts()), 2)
+
+    def test_second_ambiguous_post_then_lookup_failure(self):
+        lookup_error = alegra.AlegraServerError("lookup", status_code=502)
+        self._wire(posts=[_timeout(), _timeout()], lookups=[[], lookup_error])
+
+        with patch('alegra.invoices.time.monotonic', return_value=0.0):
+            with patch('alegra.invoices.time.sleep'):
+                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                    self.client.invoices.create_once(
+                        self._params(), "order-1", precheck=False, verify_window=0)
+
+        self.assertIs(ctx.exception.__cause__, lookup_error)
+        self.assertEqual(ctx.exception.attempts, 2)
+        self.assertEqual(len(self._posts()), 2)
+
+    def test_end_to_end_post_cap_through_query(self):
+        from unittest.mock import MagicMock
+
+        def response(status, body):
+            mock = MagicMock()
+            mock.status_code = status
+            mock.text = body
+            mock.json.return_value = json.loads(body)
+            mock.headers = {}
+            return mock
+
+        client = AlegraClient(user="user", token="token")
+        responses = [
+            requests.exceptions.ReadTimeout("timeout"),
+            response(200, "[]"),
+            response(503, '{"message": "boom"}'),
+            response(200, "[]"),
+        ]
+
+        with patch('requests.Session.request', side_effect=responses) as mock_request:
+            with patch('alegra.invoices.time.monotonic', return_value=0.0):
+                with patch('alegra.invoices.time.sleep'):
+                    with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                        client.invoices.create_once(
+                            self._params(), "order-1", precheck=False, verify_window=0)
+
+        posts = [
+            call for call in mock_request.call_args_list
+            if (call.kwargs.get('method') or call.args[0]).lower() == 'post'
+        ]
+        self.assertEqual(len(posts), 2)
+        self.assertEqual(ctx.exception.attempts, 2)
 
     def test_post_validation_error_is_raised_unchanged(self):
         error = alegra.AlegraValidationError("invalid", status_code=400)

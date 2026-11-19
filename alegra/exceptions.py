@@ -12,6 +12,8 @@ from typing import Any, Mapping, Optional
 import requests
 import urllib3
 
+from alegra.dedup import _json_safe
+
 
 class AlegraAPIError(Exception):
     """Exception raised for errors in the Alegra API response.
@@ -120,7 +122,7 @@ class AlegraUnverifiedCreateError(AlegraAPIError):
             "dedup_key": self.dedup_key,
             "client_id": self.client_id,
             "resource": self.resource,
-            "payload": copy.deepcopy(self.payload),
+            "payload": _json_safe(self.payload),
             "attempts": self.attempts,
             "status_code": self.status_code,
             "response_body": self.response_body,
