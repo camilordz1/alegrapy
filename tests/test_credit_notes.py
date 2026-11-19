@@ -44,7 +44,10 @@ class TestCreditNotes(unittest.TestCase):
             self.calls.append((method, url, kwargs))
             if method.lower() == 'get' and '/invoices/' in url:
                 if self.invoice_states:
-                    return copy.deepcopy(self.invoice_states.pop(0))
+                    state = self.invoice_states.pop(0)
+                    if isinstance(state, Exception):
+                        raise state
+                    return copy.deepcopy(state)
                 return copy.deepcopy(self.invoice)
             if method.lower() == 'get' and '/credit-notes' in url:
                 return self.note_pages.pop(0) if self.note_pages else []
@@ -187,6 +190,27 @@ class TestCreditNotes(unittest.TestCase):
         self.assertIs(result, existing)
         self.assertEqual(len(self._post_calls()), 1)
         self.assertGreaterEqual(len(self._note_gets()), 2)
+
+    def test_retry_guard_failure_after_ambiguous_post_is_quarantined(self):
+        paid = dict(self.invoice, status="closed", balance=0, totalPaid=21008.4)
+        for label, third_read in (("read fails", alegra.AlegraTimeoutError("slow")),
+                                  ("status changed", paid)):
+            with self.subTest(guard=label):
+                self.calls = []
+                # initial read, guard before POST 1, guard before POST 2
+                self.invoice_states = [self.invoice, self.invoice, third_read]
+                self.note_pages = [[], []]
+                self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+
+                with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
+                    with patch.object(_FLOW_TIME, 'sleep'):
+                        with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                            self.client.invoices.annul(11742, "motivo", verify_window=0)
+
+                self.assertEqual(ctx.exception.attempts, 1)
+                self.assertEqual(ctx.exception.resource, "credit-notes")
+                self.assertIsNotNone(ctx.exception.__cause__)
+                self.assertEqual(len(self._post_calls()), 1)
 
     def test_annul_unverified_raises_with_credit_note_resource(self):
         self.note_pages = [[], [], []]

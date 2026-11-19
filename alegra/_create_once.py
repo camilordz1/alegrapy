@@ -10,7 +10,8 @@ import re
 import time
 from typing import Any, Callable, Dict, Optional
 
-from alegra.exceptions import AlegraAPIError, AlegraStampError, AlegraUnverifiedCreateError
+from alegra.exceptions import (AlegraAlreadyAnnulledError, AlegraAPIError, AlegraStampError,
+                               AlegraUnverifiedCreateError)
 from alegra.retry import _may_have_been_processed
 
 logger = logging.getLogger("alegra")
@@ -136,7 +137,15 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
         raise _unverified_error(dedup_key, client_id, resource, payload,
                                 attempts, last_error) from last_error
 
-    existing = before_post() if before_post is not None else None
+    # The first POST may have created the document, so a failing guard here must not
+    # surface raw: quarantine it, unless the guard reached a definitive outcome
+    try:
+        existing = before_post() if before_post is not None else None
+    except (AlegraAlreadyAnnulledError, AlegraStampError):
+        raise
+    except (AlegraAPIError, ValueError) as guard_error:
+        raise _unverified_error(dedup_key, client_id, resource, payload,
+                                attempts, last_error) from guard_error
     if existing is not None:
         return existing
 
