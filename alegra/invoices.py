@@ -7,7 +7,7 @@ import numbers
 import os
 import tempfile
 import time
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -62,6 +62,28 @@ def _file_url_host(url: str) -> str:
 def _enum_value(value: Any) -> Any:
     """Accept enum members or raw strings."""
     return value.value if isinstance(value, enum.Enum) else value
+
+
+def _credit_note_date(value: Any) -> Optional[str]:
+    """Validate an explicit credit-note date; ``None`` means "today" (resolved later).
+
+    Accepts a ``date``/``datetime`` or an ISO ``YYYY-MM-DD`` string and returns the ISO
+    text. Anything else raises ``ValueError`` before any request is made.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, str):
+        text = value.strip()
+        if len(text) == 10:  # fromisoformat accepts other shapes on newer Pythons
+            try:
+                return date.fromisoformat(text).isoformat()
+            except ValueError:
+                pass
+    raise ValueError("date must be a date or an ISO 'YYYY-MM-DD' string")
 
 
 def _note_is_stamped(note: Dict[str, Any]) -> bool:
@@ -270,7 +292,8 @@ class Invoices(Actions):
     def annul(self, id: Union[int, str], cause: str, *, dedup_key: Optional[str] = None,
               operation_type: Any = None, number_template_id: Any = None,
               stamp: bool = True, on_unverified: str = "retry",
-              verify_window: float = 30.0, lookup_pages: int = 2) -> Dict[str, Any]:
+              verify_window: float = 30.0, lookup_pages: int = 2,
+              date: Any = None) -> Dict[str, Any]:
         """Annul a stamped electronic invoice with a credit note.
 
         Builds and posts a ``VOID_ELECTRONIC_INVOICE`` credit note referencing the
@@ -297,6 +320,9 @@ class Invoices(Actions):
             verify_window (float): Seconds to look for the note after an ambiguous
                 failure (default 30).
             lookup_pages (int): Pages of 30 credit notes scanned per lookup (default 2).
+            date (date or str, optional): Credit-note date (``date`` or ISO
+                ``YYYY-MM-DD``). Defaults to the host's local date; pass it explicitly
+                when the host clock or timezone may differ from the business date.
 
         Returns:
             dict: The created (or previously existing) credit note.
@@ -313,6 +339,7 @@ class Invoices(Actions):
         """
         if not isinstance(cause, str) or not cause.strip():
             raise ValueError("cause must not be blank")
+        note_date = _credit_note_date(date)
 
         invoice = self.read(id)
         if not isinstance(invoice, dict):
@@ -377,7 +404,8 @@ class Invoices(Actions):
 
         payload = payload_with_marker(
             self._annulment_payload(invoice, invoice_id, client_id, cause,
-                                    operation_type, number_template_id, stamp),
+                                    operation_type, number_template_id, stamp,
+                                    note_date),
             key,
         )
 
@@ -668,7 +696,7 @@ class Invoices(Actions):
     def _annulment_payload(invoice: Dict[str, Any], invoice_id: Union[int, str],
                            client_id: Union[int, str], cause: str,
                            operation_type: Any, number_template_id: Any,
-                           stamp: bool) -> Dict[str, Any]:
+                           stamp: bool, note_date: Optional[str] = None) -> Dict[str, Any]:
         """Build the credit-note payload from the invoice record."""
         items = []
         for item in invoice.get("items") or []:
@@ -694,7 +722,7 @@ class Invoices(Actions):
             items.append(entry)
 
         payload: Dict[str, Any] = {
-            "date": date.today().isoformat(),
+            "date": note_date or date.today().isoformat(),
             "client": {"id": client_id},
             "items": items,
             "type": CreditNoteType.VOID_ELECTRONIC_INVOICE.value,

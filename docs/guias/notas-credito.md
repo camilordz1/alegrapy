@@ -33,7 +33,10 @@ La nota se arma con:
 - `type = VOID_ELECTRONIC_INVOICE`;
 - `creditNoteOperationType = REFERENCE_TO_ELECTRONIC_INVOICE` por defecto;
 - `invoices = [{"id": <factura>, "amount": <total>}]`;
-- la fecha de hoy;
+- la fecha de hoy según el reloj del servidor, o la que pases con `date=` (un `date` o el texto
+  `"AAAA-MM-DD"`). Pásala explícita si tu servidor corre en otra zona horaria (por ejemplo, UTC):
+  cerca de la medianoche podría enviar el día siguiente al de tu operación,
+  `client.invoices.annul(11742, "motivo", date="2026-11-19")`;
 - `stamp = {"generateStamp": True}` salvo que pases `stamp=False`;
 - la marca de deduplicación en `observations` (nunca se imprime en la factura).
 

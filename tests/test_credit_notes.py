@@ -499,6 +499,25 @@ class TestCreditNotes(unittest.TestCase):
         payload = self._post_calls()[0][2]['data']
         self.assertEqual(payload['date'], "2026-01-02")
 
+    def test_annul_accepts_an_explicit_date(self):
+        for given, expected in ((date(2026, 11, 19), "2026-11-19"), (" 2026-11-19 ", "2026-11-19")):
+            with self.subTest(given=given):
+                self.calls = []
+                self.note_pages = [[]]
+                self.posts = [{"id": 910}]
+
+                self.client.invoices.annul(11742, "motivo", date=given)
+
+                self.assertEqual(self._post_calls()[0][2]['data']['date'], expected)
+
+    def test_annul_rejects_invalid_dates_before_any_request(self):
+        for bad in ("19/11/2026", "2026-13-01", "", 20261119, True):
+            with self.subTest(bad=bad):
+                self.calls = []
+                with self.assertRaises(ValueError):
+                    self.client.invoices.annul(11742, "motivo", date=bad)
+                self.assertEqual(self.calls, [])
+
     def test_void_sends_cause_only_when_given(self):
         self.posts = [{"status": "void"}]
         self.client.invoices.void(5, cause="motivo")
