@@ -8,14 +8,14 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
 from alegra.actions import Actions, validate_id
 from alegra.exceptions import (AlegraAPIError, AlegraFileNotAvailableError,
-                               AlegraUnverifiedCreateError, _error_for_exception,
-                               _error_for_status)
+                               AlegraTimeoutError, AlegraUnverifiedCreateError,
+                               _error_for_exception, _error_for_status)
 from alegra.retry import _may_have_been_processed
 
 logger = logging.getLogger("alegra")
@@ -27,12 +27,23 @@ _VERIFY_INITIAL_INTERVAL = 1.0
 _VERIFY_MAX_INTERVAL = 8.0
 _DEFAULT_MAX_BYTES = 25 * 1024 * 1024
 _XML_BOM = b"\xef\xbb\xbf"
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_MAX_REDIRECTS = 5
 
 
 def _validate_max_bytes(max_bytes: Any) -> int:
     if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
         raise ValueError("max_bytes must be a positive integer")
     return max_bytes
+
+
+def _resolve_deadline(deadline: Any, client_timeout: float) -> float:
+    if deadline is None:
+        return max(60.0, 4 * float(client_timeout))
+    if (isinstance(deadline, bool) or not isinstance(deadline, numbers.Real)
+            or not math.isfinite(deadline) or deadline <= 0):
+        raise ValueError("deadline must be a positive finite number")
+    return float(deadline)
 
 
 def _file_url_host(url: str) -> str:
@@ -312,16 +323,23 @@ class Invoices(Actions):
             retry_after=details.retry_after,
         )
 
-    def get_pdf(self, id: Union[int, str], max_bytes: int = _DEFAULT_MAX_BYTES) -> bytes:
+    def get_pdf(self, id: Union[int, str], max_bytes: int = _DEFAULT_MAX_BYTES,
+                deadline: Optional[float] = None) -> bytes:
         """Download the PDF of an invoice and return its bytes.
 
         The file URL comes from the authenticated ``GET /invoices/{id}?fields=pdf`` call;
         the download itself is anonymous: no API credentials, client headers or cookies
         are sent to the file host. Signed URLs expire, so store the file, not the URL.
 
+        Two limits apply: ``max_bytes`` caps the file size, and ``deadline`` caps the
+        total elapsed time of the download (including redirects), because
+        ``client.timeout`` only bounds connect and each individual read.
+
         Args:
             id (int or str): Invoice ID.
             max_bytes (int): Maximum accepted file size (default 25 MB).
+            deadline (float, optional): Maximum seconds for the whole download;
+                defaults to ``max(60, 4 * client.timeout)``.
 
         Returns:
             bytes: PDF content, starting with ``%PDF-``.
@@ -329,11 +347,14 @@ class Invoices(Actions):
         Raises:
             AlegraFileNotAvailableError: If the invoice has no PDF (drafts never do).
             AlegraAPIError: If the URL, download or content is invalid.
-            ValueError: If the ID or ``max_bytes`` is invalid.
+            AlegraTimeoutError: If the total download deadline is exceeded.
+            ValueError: If the ID, ``max_bytes`` or ``deadline`` is invalid.
         """
-        return self._fetch_file(id, "pdf", _validate_max_bytes(max_bytes))
+        return self._fetch_file(id, "pdf", _validate_max_bytes(max_bytes),
+                                _resolve_deadline(deadline, self.client.timeout))
 
-    def get_xml(self, id: Union[int, str], max_bytes: int = _DEFAULT_MAX_BYTES) -> bytes:
+    def get_xml(self, id: Union[int, str], max_bytes: int = _DEFAULT_MAX_BYTES,
+                deadline: Optional[float] = None) -> bytes:
         """Download the stamped XML of an invoice and return its bytes.
 
         Uses the same anonymous download and safety rules as :meth:`get_pdf`.
@@ -341,6 +362,8 @@ class Invoices(Actions):
         Args:
             id (int or str): Invoice ID.
             max_bytes (int): Maximum accepted file size (default 25 MB).
+            deadline (float, optional): Maximum seconds for the whole download;
+                defaults to ``max(60, 4 * client.timeout)``.
 
         Returns:
             bytes: XML content (a UTF-8 BOM is allowed before ``<?xml``).
@@ -348,13 +371,16 @@ class Invoices(Actions):
         Raises:
             AlegraFileNotAvailableError: If the invoice has no stamped XML.
             AlegraAPIError: If the URL, download or content is invalid.
-            ValueError: If the ID or ``max_bytes`` is invalid.
+            AlegraTimeoutError: If the total download deadline is exceeded.
+            ValueError: If the ID, ``max_bytes`` or ``deadline`` is invalid.
         """
-        return self._fetch_file(id, "xml", _validate_max_bytes(max_bytes))
+        return self._fetch_file(id, "xml", _validate_max_bytes(max_bytes),
+                                _resolve_deadline(deadline, self.client.timeout))
 
     def download_pdf(self, id: Union[int, str], path: Union[str, os.PathLike],
                      overwrite: bool = False,
-                     max_bytes: int = _DEFAULT_MAX_BYTES) -> Path:
+                     max_bytes: int = _DEFAULT_MAX_BYTES,
+                     deadline: Optional[float] = None) -> Path:
         """Download an invoice PDF to ``path`` atomically.
 
         Args:
@@ -362,22 +388,26 @@ class Invoices(Actions):
             path (str or PathLike): Destination file; its parent must exist.
             overwrite (bool): Replace an existing file (default False).
             max_bytes (int): Maximum accepted file size (default 25 MB).
+            deadline (float, optional): Maximum seconds for the whole download;
+                defaults to ``max(60, 4 * client.timeout)``.
 
         Returns:
             pathlib.Path: The final path.
 
         Raises:
             FileExistsError: If the file exists and ``overwrite`` is False (before any
-                request is made).
+                request is made, and again atomically at the final step).
             FileNotFoundError: If the parent directory does not exist.
             AlegraFileNotAvailableError: If the invoice has no PDF.
             AlegraAPIError: If the URL, download or content is invalid.
+            AlegraTimeoutError: If the total download deadline is exceeded.
         """
-        return self._download_to_path(id, "pdf", path, overwrite, max_bytes)
+        return self._download_to_path(id, "pdf", path, overwrite, max_bytes, deadline)
 
     def download_xml(self, id: Union[int, str], path: Union[str, os.PathLike],
                      overwrite: bool = False,
-                     max_bytes: int = _DEFAULT_MAX_BYTES) -> Path:
+                     max_bytes: int = _DEFAULT_MAX_BYTES,
+                     deadline: Optional[float] = None) -> Path:
         """Download an invoice XML to ``path`` atomically.
 
         Args:
@@ -385,27 +415,31 @@ class Invoices(Actions):
             path (str or PathLike): Destination file; its parent must exist.
             overwrite (bool): Replace an existing file (default False).
             max_bytes (int): Maximum accepted file size (default 25 MB).
+            deadline (float, optional): Maximum seconds for the whole download;
+                defaults to ``max(60, 4 * client.timeout)``.
 
         Returns:
             pathlib.Path: The final path.
 
         Raises:
             FileExistsError: If the file exists and ``overwrite`` is False (before any
-                request is made).
+                request is made, and again atomically at the final step).
             FileNotFoundError: If the parent directory does not exist.
             AlegraFileNotAvailableError: If the invoice has no stamped XML.
             AlegraAPIError: If the URL, download or content is invalid.
+            AlegraTimeoutError: If the total download deadline is exceeded.
         """
-        return self._download_to_path(id, "xml", path, overwrite, max_bytes)
+        return self._download_to_path(id, "xml", path, overwrite, max_bytes, deadline)
 
-    def _fetch_file(self, id: Union[int, str], field: str, max_bytes: int) -> bytes:
+    def _fetch_file(self, id: Union[int, str], field: str, max_bytes: int,
+                    deadline: float) -> bytes:
         """Fetch an invoice file, refreshing an expired URL once."""
         record = self.read(id, fields=field)
         url = self._file_field_url(record, field)
         prefix = b"%PDF-" if field == "pdf" else b"<?xml"
 
         try:
-            return self._download_file(id, field, url, prefix, max_bytes)
+            return self._download_file(id, field, url, prefix, max_bytes, deadline)
         except AlegraAPIError as error:
             if error.status_code not in (403, 404):
                 raise
@@ -413,7 +447,7 @@ class Invoices(Actions):
         # The signature expired (or the object moved): ask Alegra for a fresh URL once.
         record = self.read(id, fields=field)
         url = self._file_field_url(record, field)
-        return self._download_file(id, field, url, prefix, max_bytes)
+        return self._download_file(id, field, url, prefix, max_bytes, deadline)
 
     @staticmethod
     def _file_field_url(record: Any, field: str) -> str:
@@ -426,59 +460,81 @@ class Invoices(Actions):
         return value
 
     def _download_file(self, id: Union[int, str], field: str, url: str,
-                       expected_prefix: bytes, max_bytes: int) -> bytes:
-        """Download one file anonymously, with size and content checks."""
-        host = _file_url_host(url)
+                       expected_prefix: bytes, max_bytes: int, deadline: float) -> bytes:
+        """Download one file anonymously, following redirects safely."""
+        end = time.monotonic() + deadline
         api_path = urlsplit(self._resource_url(id)).path
-        logger.info(f"GET - {api_path} - downloading {field.upper()} from {host}")
+        current_url = url
+        hops = 0
 
-        try:
-            response = requests.get(url, timeout=self.client.timeout, stream=True,
-                                    allow_redirects=True)
-        except requests.RequestException as error:
-            raise _error_for_exception(error) from error
-
-        try:
-            final_url = getattr(response, "url", None)
-            if isinstance(final_url, str):
-                _file_url_host(final_url)
-
-            if not 200 <= response.status_code < 300:
-                raise _error_for_status(
-                    f"File download failed (Status {response.status_code})",
-                    response.status_code, None, getattr(response, "headers", None)
-                )
+        while True:
+            self._check_deadline(end)
+            host = _file_url_host(current_url)
+            logger.info(f"GET - {api_path} - downloading {field.upper()} from {host}")
 
             try:
-                chunks = []
-                total = 0
-                for chunk in response.iter_content(chunk_size=64 * 1024):
-                    if not chunk:
-                        continue
-                    total += len(chunk)
-                    if total > max_bytes:
-                        raise AlegraAPIError("File exceeds the maximum allowed size")
-                    chunks.append(chunk)
+                response = requests.get(current_url, timeout=self.client.timeout,
+                                        stream=True, allow_redirects=False)
             except requests.RequestException as error:
                 raise _error_for_exception(error) from error
-        finally:
-            close = getattr(response, "close", None)
-            if callable(close):
-                close()
 
-        content = b"".join(chunks)
-        check = content[len(_XML_BOM):] if content.startswith(_XML_BOM) else content
-        if not check.startswith(expected_prefix):
-            raise AlegraAPIError("unexpected file content")
-        return content
+            try:
+                if response.status_code in _REDIRECT_STATUSES:
+                    headers = getattr(response, "headers", None)
+                    location = headers.get('Location') if headers is not None else None
+                    if not isinstance(location, str) or not location:
+                        raise AlegraAPIError("Redirect response without a Location header")
+                    hops += 1
+                    if hops > _MAX_REDIRECTS:
+                        raise AlegraAPIError("too many redirects")
+                    # Resolved and validated at the top of the loop, before it is requested
+                    current_url = urljoin(current_url, location)
+                    continue
+
+                if not 200 <= response.status_code < 300:
+                    raise _error_for_status(
+                        f"File download failed (Status {response.status_code})",
+                        response.status_code, None, getattr(response, "headers", None)
+                    )
+
+                try:
+                    chunks = []
+                    total = 0
+                    for chunk in response.iter_content(chunk_size=64 * 1024):
+                        self._check_deadline(end)
+                        if not chunk:
+                            continue
+                        total += len(chunk)
+                        if total > max_bytes:
+                            raise AlegraAPIError("File exceeds the maximum allowed size")
+                        chunks.append(chunk)
+                except requests.RequestException as error:
+                    raise _error_for_exception(error) from error
+            finally:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+
+            content = b"".join(chunks)
+            check = content[len(_XML_BOM):] if content.startswith(_XML_BOM) else content
+            if not check.startswith(expected_prefix):
+                raise AlegraAPIError("unexpected file content")
+            return content
+
+    @staticmethod
+    def _check_deadline(end: float) -> None:
+        if time.monotonic() >= end:
+            raise AlegraTimeoutError("File download deadline exceeded")
 
     def _download_to_path(self, id: Union[int, str], field: str,
                           path: Union[str, os.PathLike], overwrite: bool,
-                          max_bytes: int) -> Path:
+                          max_bytes: int, deadline: Optional[float]) -> Path:
         target = Path(path)
         size_limit = _validate_max_bytes(max_bytes)
+        time_limit = _resolve_deadline(deadline, self.client.timeout)
         self._check_target(target, overwrite)
-        return self._atomic_write(target, self._fetch_file(id, field, size_limit))
+        data = self._fetch_file(id, field, size_limit, time_limit)
+        return self._atomic_write(target, data, overwrite)
 
     @staticmethod
     def _check_target(target: Path, overwrite: bool) -> None:
@@ -488,8 +544,8 @@ class Invoices(Actions):
             raise FileExistsError(f"File already exists: {target}")
 
     @staticmethod
-    def _atomic_write(target: Path, data: bytes) -> Path:
-        """Write bytes to a temp file in the target directory, fsync and replace."""
+    def _atomic_write(target: Path, data: bytes, overwrite: bool) -> Path:
+        """Write bytes atomically; with ``overwrite=False`` never clobber a new file."""
         descriptor, temp_name = tempfile.mkstemp(
             dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
         )
@@ -499,13 +555,25 @@ class Invoices(Actions):
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp_path, target)
-        except BaseException:
+
+            if overwrite:
+                os.replace(temp_path, target)
+            else:
+                try:
+                    os.link(temp_path, target)
+                except FileExistsError:
+                    raise
+                except (OSError, AttributeError):
+                    # Filesystem without hardlinks: exclusive create at the final step
+                    with open(target, "xb") as handle:
+                        handle.write(data)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+        finally:
             try:
                 temp_path.unlink()
             except OSError:
                 pass
-            raise
         return target
 
     def send_email(self, id: Union[int, str], emails: Union[List[str], str], send_copy_to_user: bool = False,

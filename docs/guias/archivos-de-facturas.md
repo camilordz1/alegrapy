@@ -25,7 +25,11 @@ El flujo tiene dos pasos:
 La URL firmada es en sí misma un secreto portador: el SDK nunca la escribe en logs; solo registra
 el host del archivo. No se mantiene una lista blanca de hosts (Alegra puede mover sus CDN): la
 frontera de confianza es que la URL venga de la respuesta autenticada de la API y sea `https`.
-Una redirección a `http://` se rechaza.
+
+Las redirecciones se siguen **manualmente**: cada `Location` se resuelve y se valida (https, host y
+sin credenciales) **antes** de pedirla, para que una redirección a `http://` nunca llegue a
+solicitarse en claro. Se permiten como máximo 5 saltos; una respuesta de redirección sin
+`Location` o un salto de más lanza `AlegraAPIError`.
 
 ## Las URLs caducan
 
@@ -47,9 +51,16 @@ correspondiente (`AlegraAuthError` para 403, `AlegraNotFoundError` para 404).
   UTF-8). Cualquier otra cosa lanza `AlegraAPIError("unexpected file content")` sin incluir los
   bytes en el mensaje.
 - `max_bytes` (25 MB por defecto) limita el tamaño; si se supera, se lanza `AlegraAPIError`.
-- El timeout de la descarga es el del cliente (`client.timeout`).
+- El timeout de la descarga es el del cliente (`client.timeout`), que limita la conexión y cada
+  lectura individual, no el total.
+- `deadline` (por defecto `max(60, 4 * client.timeout)` segundos) limita el tiempo **total** de la
+  descarga, incluidos los saltos de redirección y la lectura de los trozos; si se supera, se lanza
+  `AlegraTimeoutError`.
 - `download_*` comprueba el destino **antes** de hacer cualquier petición: si el archivo existe y
   `overwrite=False`, lanza `FileExistsError`; si la carpeta padre no existe, `FileNotFoundError`.
+  Con `overwrite=False` la escritura final tampoco pisa un archivo que aparezca durante la
+  descarga: el archivo temporal se enlaza con `os.link` (o se crea en exclusiva como respaldo), de
+  modo que el contenido existente queda intacto.
 - No hay estado compartido: las descargas cumplen el contrato de
   [Concurrencia](concurrencia.md).
 
@@ -59,7 +70,9 @@ correspondiente (`AlegraAuthError` para 403, `AlegraNotFoundError` para 404).
 |---|---|
 | Sin PDF/XML (borrador, sin timbrar) | `AlegraFileNotAvailableError` |
 | URL no `https`, con credenciales o redirección a `http` | `AlegraAPIError` |
+| Demasiadas redirecciones, o redirección sin `Location` | `AlegraAPIError` |
 | 403/404 del host de archivos (tras refrescar una vez) | `AlegraAuthError` / `AlegraNotFoundError` |
 | Contenido inesperado o tamaño excedido | `AlegraAPIError` |
+| Tiempo total de descarga excedido | `AlegraTimeoutError` |
 | Fallo de red | `AlegraConnectionError` / `AlegraTimeoutError` |
 | Archivo existente / carpeta inexistente | `FileExistsError` / `FileNotFoundError` |
