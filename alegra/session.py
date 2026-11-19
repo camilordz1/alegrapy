@@ -1,5 +1,6 @@
 import base64
 import logging
+from http.cookiejar import DefaultCookiePolicy
 from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlsplit, urlunsplit
 import requests
@@ -67,6 +68,20 @@ class AlegraClient:
     """The main client interface for interacting with the Alegra API.
 
     Allows managing multiple API sessions with different credentials.
+
+    Thread safety:
+        Safe: any number of threads may send requests through the same client, and
+        several clients with different credentials may be used at the same time. Every
+        request builds its own ``Authorization`` header from the client it was sent
+        through, and the shared connection pool never stores credentials or cookies.
+
+        Not safe: changing a client's configuration (``user``, ``token``, ``url``,
+        ``timeout``, ``retry``) while other threads are using it. Configure the client
+        first, then share it.
+
+        Not safe for multiple tenants: the legacy global ``session`` and the module-level
+        resources keep process-wide credentials. Multi-tenant applications must create
+        one ``AlegraClient`` per tenant.
     """
     def __init__(self, user: Optional[str] = None, token: Optional[str] = None, url: Optional[str] = None,
                  timeout: Optional[float] = None, retry: Optional[RetryPolicy] = None) -> None:
@@ -91,6 +106,10 @@ class AlegraClient:
         self._timeout = timeout
         self._retry = retry
         self.session = requests.Session()
+        # The API authenticates every request with a header and needs no cookies.
+        # Rejecting them removes the cookie jar, the only shared mutable state left in
+        # the pooled session, so one client can serve many threads safely.
+        self.session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
         self.session.headers.update({
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -432,6 +451,23 @@ class AlegraClient:
         # The API message may contain user data: it stays in the exception, never in the logs
         logger.warning(f"{method.upper()} - {short_url} - Failed! (Status: {response.status_code})")
         raise _error_for_status(error_msg, response.status_code, response.text, response.headers)
+
+
+    def close(self) -> None:
+        """Close the underlying HTTP session and release pooled connections.
+
+        Safe to call more than once. The client must not be reused after closing it;
+        ``requests`` may silently reopen pools, which is unsupported behavior.
+        """
+        self.session.close()
+
+    def __enter__(self) -> 'AlegraClient':
+        """Return the client so it can be used in a ``with`` block."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        """Close the client when leaving a ``with`` block; never swallow exceptions."""
+        self.close()
 
 
 class session:

@@ -45,7 +45,7 @@ También puedes pasar un cliente a un recurso legacy: `Invoices(client)`.
 ## Por qué migrar
 
 - **Varias cuentas a la vez**: cada `AlegraClient` tiene sus credenciales; `session` es global y compartido por todo el proceso.
-- **Menos riesgo de mezclar credenciales** en aplicaciones concurrentes o con varios usuarios.
+- **Menos riesgo de mezclar credenciales** en aplicaciones concurrentes o con varios usuarios. Ver [Concurrencia y ciclo de vida](concurrencia.md).
 - **Configuración explícita** de URL y timeout por instancia.
 
 ## Cuándo el estilo legacy aún tiene sentido

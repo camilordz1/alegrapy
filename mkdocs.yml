@@ -56,6 +56,7 @@ nav:
       - Recursos: guias/recursos.md
       - Errores: guias/errores.md
       - Reintentos: guias/reintentos.md
+      - Concurrencia: guias/concurrencia.md
       - Seguridad: guias/seguridad.md
       - Migración desde el modo legacy: guias/migracion-legacy.md
   - Referencia de la API:
