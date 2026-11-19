@@ -107,6 +107,17 @@ class AlegraStampError(AlegraAPIError):
         self.document = copy.deepcopy(document)
 
 
+class AlegraAlreadyAnnulledError(AlegraAPIError):
+    """The invoice is already fully cancelled by an annulment note.
+
+    Attributes:
+        invoice_id (int or str): Invoice that is already annulled.
+    """
+    def __init__(self, message: str, *, invoice_id: Any) -> None:
+        super().__init__(message)
+        self.invoice_id = invoice_id
+
+
 class AlegraUnverifiedCreateError(AlegraAPIError):
     """A create failed ambiguously and Alegra could not confirm whether it happened.
 

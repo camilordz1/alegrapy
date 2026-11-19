@@ -13,6 +13,7 @@ from alegra.exceptions import (
     AlegraTimeoutError,
     AlegraFileNotAvailableError,
     AlegraStampError,
+    AlegraAlreadyAnnulledError,
     AlegraUnverifiedCreateError,
 )
 from alegra.actions import Actions, actions
@@ -40,6 +41,7 @@ __all__ = [
     'AlegraTimeoutError',
     'AlegraFileNotAvailableError',
     'AlegraStampError',
+    'AlegraAlreadyAnnulledError',
     'AlegraUnverifiedCreateError',
     'RetryPolicy',
     'make_dedup_key',

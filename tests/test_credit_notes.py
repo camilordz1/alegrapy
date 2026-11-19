@@ -8,9 +8,9 @@ from unittest.mock import patch
 import alegra
 from alegra import AlegraClient
 
-# The shared create-once flow owns the clock; patch the module object directly because
-# `alegra.<resource>` names are shadowed by the legacy class aliases.
+# Patch module objects directly: `alegra.<resource>` names are shadowed by legacy aliases.
 _FLOW_TIME = importlib.import_module('alegra._create_once').time
+_INVOICES_MODULE = importlib.import_module('alegra.invoices')
 
 INVOICE = {
     "id": 11742,
@@ -36,12 +36,15 @@ class TestCreditNotes(unittest.TestCase):
         self.client = AlegraClient(user="user", token="token")
         self.calls = []
         self.invoice = copy.deepcopy(INVOICE)
+        self.invoice_states = []
         self.note_pages = []
         self.posts = []
 
         def query(method, url, **kwargs):
             self.calls.append((method, url, kwargs))
             if method.lower() == 'get' and '/invoices/' in url:
+                if self.invoice_states:
+                    return copy.deepcopy(self.invoice_states.pop(0))
                 return copy.deepcopy(self.invoice)
             if method.lower() == 'get' and '/credit-notes' in url:
                 return self.note_pages.pop(0) if self.note_pages else []
@@ -201,7 +204,11 @@ class TestCreditNotes(unittest.TestCase):
         self.assertEqual(len(self._post_calls()), 2)
 
     def test_stamp_failure_400_with_created_note_raises_stamp_error(self):
-        created = {"id": 903, "status": "open", "total": 21008.4}
+        created = {
+            "id": 903, "status": "open", "total": 21008.4,
+            "creditNoteOperationType": "REFERENCE_TO_ELECTRONIC_INVOICE",
+            "invoices": [{"id": 11742, "amount": 21008.4}],
+        }
         body = json.dumps({"message": "stamp failed", "creditNote": created})
         error = alegra.AlegraValidationError("stamp failed", status_code=400,
                                              response_body=body)
@@ -227,6 +234,207 @@ class TestCreditNotes(unittest.TestCase):
 
         self.assertIs(ctx.exception, error)
         self.assertEqual(len(self._post_calls()), 1)
+
+    def test_invoice_echo_400_is_not_misread_as_stamp_error(self):
+        body = json.dumps({"message": "bad",
+                           "invoice": {"id": 11742, "status": "open", "total": 1}})
+        error = alegra.AlegraValidationError("bad", status_code=400, response_body=body)
+        self.note_pages = [[]]
+        self.posts = [error]
+
+        with self.assertRaises(alegra.AlegraValidationError) as ctx:
+            self.client.invoices.annul(11742, "motivo")
+
+        self.assertIs(ctx.exception, error)
+
+    def test_note_for_another_invoice_is_not_a_stamp_error(self):
+        other = {"id": 904, "creditNoteOperationType": "REFERENCE_TO_ELECTRONIC_INVOICE",
+                 "invoices": [{"id": 999, "amount": 1}]}
+        body = json.dumps({"message": "bad", "creditNote": other})
+        error = alegra.AlegraValidationError("bad", status_code=400, response_body=body)
+        self.note_pages = [[]]
+        self.posts = [error]
+
+        with self.assertRaises(alegra.AlegraValidationError) as ctx:
+            self.client.invoices.annul(11742, "motivo")
+
+        self.assertIs(ctx.exception, error)
+
+    def _closed_invoice(self):
+        invoice = copy.deepcopy(INVOICE)
+        invoice.update({"status": "closed", "balance": 0, "totalPaid": 0.0})
+        return invoice
+
+    def test_annul_returns_note_when_invoice_is_already_annulled(self):
+        self.invoice = self._closed_invoice()
+        existing = {"id": 950, "observations": MARKER, "client": {"id": 126}}
+        self.note_pages = [[existing]]
+
+        result = self.client.invoices.annul(11742, "motivo")
+
+        self.assertIs(result, existing)
+        self.assertEqual(self._post_calls(), [])
+
+    def test_annul_already_annulled_without_note_raises(self):
+        self.invoice = self._closed_invoice()
+        self.note_pages = [[]]
+
+        with self.assertRaises(alegra.AlegraAlreadyAnnulledError) as ctx:
+            self.client.invoices.annul(11742, "motivo")
+
+        self.assertEqual(ctx.exception.invoice_id, 11742)
+        self.assertEqual(self._post_calls(), [])
+
+    def test_annul_does_not_post_again_when_invoice_became_closed(self):
+        existing = {"id": 951, "observations": MARKER, "client": {"id": 126}}
+        self.invoice_states = [copy.deepcopy(INVOICE), copy.deepcopy(INVOICE),
+                               self._closed_invoice()]
+        self.note_pages = [[], [], [existing]]
+        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+
+        with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
+            with patch.object(_FLOW_TIME, 'sleep'):
+                result = self.client.invoices.annul(11742, "motivo", verify_window=0)
+
+        self.assertIs(result, existing)
+        self.assertEqual(len(self._post_calls()), 1)
+
+    def test_annul_became_closed_without_note_does_not_post_again(self):
+        self.invoice_states = [copy.deepcopy(INVOICE), copy.deepcopy(INVOICE),
+                               self._closed_invoice()]
+        self.note_pages = [[], [], []]
+        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+
+        with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
+            with patch.object(_FLOW_TIME, 'sleep'):
+                with self.assertRaises(alegra.AlegraAlreadyAnnulledError):
+                    self.client.invoices.annul(11742, "motivo", verify_window=0)
+
+        self.assertEqual(len(self._post_calls()), 1)
+
+    def test_annul_rejects_paid_closed_invoice(self):
+        self.invoice = self._closed_invoice()
+        self.invoice.update({"balance": 100, "totalPaid": 100})
+        self.note_pages = []
+        self.posts = []
+
+        with self.assertRaises(ValueError):
+            self.client.invoices.annul(11742, "motivo")
+
+        self.assertEqual(self._post_calls(), [])
+        self.assertEqual(self._note_gets(), [])
+
+    def test_stamp_error_on_second_post_is_raised_unchanged(self):
+        created = {"id": 905, "creditNoteOperationType": "REFERENCE_TO_ELECTRONIC_INVOICE",
+                   "invoices": [{"id": 11742, "amount": 1}]}
+        stamp_error = alegra.AlegraStampError("stamp failed", document=created,
+                                              status_code=400)
+        self.invoice_states = [copy.deepcopy(INVOICE), copy.deepcopy(INVOICE)]
+        self.note_pages = [[], []]
+        self.posts = [alegra.AlegraServerError("boom", status_code=503), stamp_error]
+
+        with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
+            with patch.object(_FLOW_TIME, 'sleep'):
+                with self.assertRaises(alegra.AlegraStampError) as ctx:
+                    self.client.invoices.annul(11742, "motivo", verify_window=0)
+
+        self.assertIs(ctx.exception, stamp_error)
+        self.assertEqual(len(self._post_calls()), 2)
+
+    def test_reconcile_client_isolation(self):
+        other = {"id": 1, "observations": MARKER, "client": {"id": 999}}
+        no_client = {"id": 2, "observations": MARKER}
+
+        self.note_pages = [[other, no_client]]
+        self.assertIs(self.client.credit_notes.reconcile("annul:11742", 126), no_client)
+
+        self.note_pages = [[other]]
+        self.assertIsNone(self.client.credit_notes.reconcile("annul:11742", 126))
+
+    def test_reconcile_honors_lookup_pages(self):
+        full_page = [{"id": index, "observations": None} for index in range(30)]
+        found = {"id": 31, "observations": MARKER}
+
+        self.note_pages = [full_page]
+        self.assertIsNone(self.client.credit_notes.reconcile("annul:11742", 126,
+                                                             lookup_pages=1))
+        self.assertEqual(len(self._note_gets()), 1)
+
+        self.calls = []
+        self.note_pages = [full_page, [found]]
+        self.assertIs(self.client.credit_notes.reconcile("annul:11742", 126,
+                                                         lookup_pages=2), found)
+        self.assertEqual(len(self._note_gets()), 2)
+
+    def test_annul_forwards_lookup_pages(self):
+        self.note_pages = [[]]
+        self.posts = [{"id": 906}]
+
+        with patch.object(alegra.CreditNotes, 'reconcile', return_value=None) as reconcile:
+            self.client.invoices.annul(11742, "motivo", lookup_pages=4)
+
+        reconcile.assert_any_call("annul:11742", 126, lookup_pages=4)
+
+    def test_annul_stamp_false_and_number_template(self):
+        self.note_pages = [[]]
+        self.posts = [{"id": 907}]
+
+        self.client.invoices.annul(11742, "motivo", stamp=False, number_template_id=33)
+
+        payload = self._post_calls()[0][2]['data']
+        self.assertNotIn('stamp', payload)
+        self.assertEqual(payload['numberTemplate'], {"id": 33})
+
+    def test_annul_custom_dedup_key(self):
+        self.note_pages = [[]]
+        self.posts = [{"id": 908}]
+
+        self.client.invoices.annul(11742, "motivo", dedup_key="custom-key")
+
+        payload = self._post_calls()[0][2]['data']
+        self.assertIn("alegrapy:dedup:custom-key", payload['observations'].splitlines())
+
+    def test_annul_on_unverified_raise_makes_one_post(self):
+        self.note_pages = [[], []]
+        self.posts = [alegra.AlegraServerError("boom", status_code=503)]
+
+        with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
+            with patch.object(_FLOW_TIME, 'sleep'):
+                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                    self.client.invoices.annul(11742, "motivo", verify_window=0,
+                                               on_unverified="raise")
+
+        self.assertEqual(ctx.exception.attempts, 1)
+        self.assertEqual(len(self._post_calls()), 1)
+
+    def test_annul_second_post_rejected_is_quarantined(self):
+        rejection = alegra.AlegraValidationError(
+            "invalid", status_code=400, response_body='{"message": "invalid"}')
+        self.note_pages = [[], []]
+        self.posts = [alegra.AlegraServerError("boom", status_code=503), rejection]
+
+        with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
+            with patch.object(_FLOW_TIME, 'sleep'):
+                with self.assertRaises(alegra.AlegraUnverifiedCreateError) as ctx:
+                    self.client.invoices.annul(11742, "motivo", verify_window=0)
+
+        self.assertEqual(ctx.exception.attempts, 2)
+        self.assertIs(ctx.exception.__cause__, rejection)
+
+    def test_annul_uses_the_patched_date_source(self):
+        class _FixedDate:
+            @staticmethod
+            def today():
+                return date(2026, 1, 2)
+
+        self.note_pages = [[]]
+        self.posts = [{"id": 909}]
+
+        with patch.object(_INVOICES_MODULE, 'date', _FixedDate):
+            self.client.invoices.annul(11742, "motivo")
+
+        payload = self._post_calls()[0][2]['data']
+        self.assertEqual(payload['date'], "2026-01-02")
 
     def test_void_sends_cause_only_when_given(self):
         self.posts = [{"status": "void"}]

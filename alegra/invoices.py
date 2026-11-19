@@ -8,6 +8,7 @@ import os
 import tempfile
 import time
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urljoin, urlsplit
@@ -20,9 +21,10 @@ from alegra._create_once import (contains_marker, marker_for, payload_with_marke
 from alegra.actions import Actions, validate_id
 from alegra.credit_notes import CreditNoteOperationType, CreditNoteType
 from alegra.dedup import make_dedup_key
-from alegra.exceptions import (AlegraAPIError, AlegraFileNotAvailableError,
-                               AlegraStampError, AlegraTimeoutError,
-                               _error_for_exception, _error_for_status)
+from alegra.exceptions import (AlegraAPIError, AlegraAlreadyAnnulledError,
+                               AlegraFileNotAvailableError, AlegraStampError,
+                               AlegraTimeoutError, _error_for_exception,
+                               _error_for_status)
 
 logger = logging.getLogger("alegra")
 
@@ -62,33 +64,68 @@ def _enum_value(value: Any) -> Any:
     return value.value if isinstance(value, enum.Enum) else value
 
 
-def _stamp_failure_document(error: AlegraAPIError) -> Optional[Dict[str, Any]]:
-    """Extract a created credit note from a stamp-failure 400 body, if present."""
+def _invoice_is_annulled(invoice: Dict[str, Any]) -> bool:
+    """An invoice fully cancelled by an annulment note: closed, zero balance and paid."""
+    return (invoice.get("status") == "closed"
+            and _is_zero(invoice.get("balance"))
+            and _is_zero(invoice.get("totalPaid")))
+
+
+def _is_zero(value: Any) -> bool:
+    """Compare an amount numerically, tolerating decimal strings."""
+    if value is None:
+        return False
+    try:
+        return Decimal(str(value)) == 0
+    except (InvalidOperation, ValueError):
+        return False
+
+
+def _stamp_failure_document(error: AlegraAPIError,
+                             invoice_id: Union[int, str]) -> Optional[Dict[str, Any]]:
+    """Extract the created credit note for this invoice from a stamp-failure 400."""
     if error.status_code != 400 or not error.response_body:
         return None
     try:
         body = json.loads(error.response_body)
     except (TypeError, ValueError):
         return None
-    return _find_created_document(body)
+    return _find_created_document(body, invoice_id)
 
 
-def _find_created_document(value: Any) -> Optional[Dict[str, Any]]:
-    """Find a document-looking object inside an error body."""
-    document_keys = ("status", "total", "stamp", "creditNoteOperationType", "number")
+def _find_created_document(value: Any,
+                           invoice_id: Union[int, str]) -> Optional[Dict[str, Any]]:
+    """Find a credit-note-looking object that references ``invoice_id``."""
     if isinstance(value, dict):
-        if "id" in value and any(key in value for key in document_keys):
+        if _is_created_note(value, invoice_id):
             return value
         for child in value.values():
-            found = _find_created_document(child)
+            found = _find_created_document(child, invoice_id)
             if found is not None:
                 return found
     elif isinstance(value, list):
         for child in value:
-            found = _find_created_document(child)
+            found = _find_created_document(child, invoice_id)
             if found is not None:
                 return found
     return None
+
+
+def _is_created_note(value: Dict[str, Any], invoice_id: Union[int, str]) -> bool:
+    """A candidate must look like a credit note for this specific invoice."""
+    if "id" not in value:
+        return False
+    note_type = value.get("type")
+    has_note_marker = bool(value.get("creditNoteOperationType")) or note_type in {
+        member.value for member in CreditNoteType
+    }
+    if not has_note_marker:
+        return False
+    invoices = value.get("invoices")
+    if not isinstance(invoices, list):
+        return False
+    return any(isinstance(entry, dict) and str(entry.get("id")) == str(invoice_id)
+               for entry in invoices)
 
 
 class Invoices(Actions):
@@ -226,13 +263,18 @@ class Invoices(Actions):
     def annul(self, id: Union[int, str], cause: str, *, dedup_key: Optional[str] = None,
               operation_type: Any = None, number_template_id: Any = None,
               stamp: bool = True, on_unverified: str = "retry",
-              verify_window: float = 30.0) -> Dict[str, Any]:
+              verify_window: float = 30.0, lookup_pages: int = 2) -> Dict[str, Any]:
         """Annul a stamped electronic invoice with a credit note.
 
         Builds and posts a ``VOID_ELECTRONIC_INVOICE`` credit note referencing the
         invoice, with double-creation protection (same invoice -> same note). Only
         invoices with status ``open`` and an accepted stamp can be annulled; use
         :meth:`void` for non-electronic documents.
+
+        The invoice is re-read before every POST. If it is now ``closed`` with zero
+        ``balance`` and ``totalPaid`` (an annulment already happened), no note is
+        created: the existing note is returned through the marker lookup, or
+        :class:`AlegraAlreadyAnnulledError` is raised.
 
         Args:
             id (int or str): Invoice ID.
@@ -247,6 +289,7 @@ class Invoices(Actions):
             on_unverified (str): ``"retry"`` (default) or ``"raise"``.
             verify_window (float): Seconds to look for the note after an ambiguous
                 failure (default 30).
+            lookup_pages (int): Pages of 30 credit notes scanned per lookup (default 2).
 
         Returns:
             dict: The created (or previously existing) credit note.
@@ -254,6 +297,8 @@ class Invoices(Actions):
         Raises:
             ValueError: If the cause is blank, the invoice is not open or not stamped,
                 the invoice has no client id, or the options are invalid.
+            AlegraAlreadyAnnulledError: The invoice is already annulled and its note
+                was not found in the scanned pages.
             AlegraStampError: The note was created but stamping failed (400 with the
                 created document, available as ``.document``).
             AlegraAPIError: Any other API failure.
@@ -265,16 +310,6 @@ class Invoices(Actions):
         invoice = self.read(id)
         if not isinstance(invoice, dict):
             raise ValueError("Unexpected invoice response")
-        if invoice.get("status") != "open":
-            raise ValueError("Only open invoices can be annulled")
-
-        stamp_data = invoice.get("stamp")
-        legal_status = stamp_data.get("legalStatus") if isinstance(stamp_data, dict) else None
-        if not isinstance(legal_status, str) or not legal_status.startswith("STAMPED_AND_ACCEPTED"):
-            raise ValueError(
-                "Only stamped and accepted electronic invoices can be annulled; "
-                "use void() for non-electronic documents"
-            )
 
         client = invoice.get("client")
         raw_client_id = client.get("id") if isinstance(client, dict) else client
@@ -288,21 +323,54 @@ class Invoices(Actions):
         else:
             key = validate_dedup_key(dedup_key)
 
+        credit_notes = self.client.credit_notes
+
+        def lookup() -> Optional[Dict[str, Any]]:
+            return credit_notes.reconcile(key, client_id, lookup_pages=lookup_pages)
+
+        def guard() -> Optional[Dict[str, Any]]:
+            """Re-read the invoice; never POST when it is already annulled."""
+            current = self.read(id)
+            if not isinstance(current, dict):
+                raise ValueError("Unexpected invoice response")
+            if _invoice_is_annulled(current):
+                note = lookup()
+                if note is not None:
+                    return note
+                raise AlegraAlreadyAnnulledError(
+                    f"Invoice {invoice_id} is already annulled", invoice_id=invoice_id)
+            if current.get("status") != "open":
+                raise ValueError("Only open invoices can be annulled")
+            return None
+
+        if _invoice_is_annulled(invoice):
+            note = lookup()
+            if note is not None:
+                return note
+            raise AlegraAlreadyAnnulledError(
+                f"Invoice {invoice_id} is already annulled", invoice_id=invoice_id)
+        if invoice.get("status") != "open":
+            raise ValueError("Only open invoices can be annulled")
+
+        stamp_data = invoice.get("stamp")
+        legal_status = stamp_data.get("legalStatus") if isinstance(stamp_data, dict) else None
+        if not isinstance(legal_status, str) or not legal_status.startswith("STAMPED_AND_ACCEPTED"):
+            raise ValueError(
+                "Only stamped and accepted electronic invoices can be annulled; "
+                "use void() for non-electronic documents"
+            )
+
         payload = payload_with_marker(
             self._annulment_payload(invoice, invoice_id, client_id, cause,
                                     operation_type, number_template_id, stamp),
             key,
         )
-        credit_notes = self.client.credit_notes
-
-        def lookup() -> Optional[Dict[str, Any]]:
-            return credit_notes.reconcile(key, client_id, lookup_pages=2)
 
         def post(data: Dict[str, Any]) -> Any:
             try:
                 return credit_notes.create(data)
             except AlegraAPIError as error:
-                document = _stamp_failure_document(error)
+                document = _stamp_failure_document(error, invoice_id)
                 if document is not None:
                     raise AlegraStampError(
                         "Credit note created but electronic stamping failed",
@@ -322,8 +390,9 @@ class Invoices(Actions):
             resource="credit-notes",
             on_unverified=on_unverified,
             verify_window=verify_window,
-            lookup_pages=2,
+            lookup_pages=lookup_pages,
             precheck=True,
+            before_post=guard,
             log_path="/credit-notes",
         )
 

@@ -66,6 +66,35 @@ También se acepta el valor como texto (`"NO_REFERENCE_TO_ELECTRONIC_INVOICE"`).
 colombiano está en la [documentación de Alegra](https://developer.alegra.com/docs/colombia); las
 reglas de anulación, en el [Centro de Ayuda](https://ayuda.alegra.com/).
 
+## Una factura ya anulada nunca se anula dos veces
+
+Además de buscar la marca, `annul()` **vuelve a leer la factura antes de cada POST**. Si la
+encuentra en estado anulado (`status="closed"`, `balance=0` y `totalPaid=0`, comparados
+numéricamente), no envía nada:
+
+- intenta devolver la nota existente con la búsqueda de la marca;
+- si no la encuentra en las páginas escaneadas, lanza `AlegraAlreadyAnnulledError` con
+  `invoice_id`.
+
+```python
+from alegra import AlegraAlreadyAnnulledError
+
+try:
+    nota = client.invoices.annul(11742, "motivo")
+except AlegraAlreadyAnnulledError as err:
+    registrar_para_revision(err.invoice_id)
+```
+
+Una factura cerrada porque fue **pagada** (`balance` o `totalPaid` mayores que cero) no está
+anulada: sigue siendo un error de precondición (solo se anulan facturas abiertas).
+
+Como la lista de notas no permite filtrar por cliente, la búsqueda recorre las notas más
+recientes de toda la cuenta. En cuentas muy activas puedes ampliar la ventana:
+
+```python
+client.invoices.annul(11742, "motivo", lookup_pages=5)  # hasta 150 notas
+```
+
 ## Idempotencia: la misma factura produce la misma nota
 
 La clave por defecto es `annul:<id>` y se guarda como marca en `observations`. Antes de crear, el
@@ -90,7 +119,9 @@ Con `on_unverified="raise"` no se hace el segundo POST: úsalo junto con una cua
 ## Si falla el timbrado
 
 La API puede responder `400` **después de crear** la nota cuando el timbrado electrónico falla.
-En ese caso el SDK lanza `AlegraStampError` y la nota creada queda en `err.document`:
+El SDK solo lo interpreta así cuando el cuerpo contiene una nota real: un objeto con `id`, con
+`creditNoteOperationType` o un `type` del catálogo, y cuya lista `invoices` referencia **esta**
+factura. En ese caso lanza `AlegraStampError` y la nota creada queda en `err.document`:
 
 ```python
 from alegra import AlegraStampError
@@ -102,7 +133,8 @@ except AlegraStampError as err:
     reintentar_timbrado(err.document["id"])
 ```
 
-Si el `400` no incluye la nota creada, se lanza el error tipado normal (`AlegraValidationError`).
+Si el `400` no tiene esa forma (por ejemplo, un error de validación que repite la factura o el
+cliente), se lanza el error tipado normal (`AlegraValidationError`).
 
 ## `void` sigue existiendo
 

@@ -10,7 +10,7 @@ import re
 import time
 from typing import Any, Callable, Dict, Optional
 
-from alegra.exceptions import AlegraAPIError, AlegraUnverifiedCreateError
+from alegra.exceptions import AlegraAPIError, AlegraStampError, AlegraUnverifiedCreateError
 from alegra.retry import _may_have_been_processed
 
 logger = logging.getLogger("alegra")
@@ -97,8 +97,13 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
                     client_id: Any, resource: str,
                     on_unverified: str = "retry", verify_window: float = 30.0,
                     lookup_pages: int = 2, precheck: bool = True,
+                    before_post: Optional[Callable[[], Optional[Dict[str, Any]]]] = None,
                     log_path: str) -> Any:
-    """POST once (twice at most), verifying ambiguous failures by dedup marker."""
+    """POST once (twice at most), verifying ambiguous failures by dedup marker.
+
+    ``before_post`` runs before every POST attempt. If it returns a document, that
+    document is returned instead of posting; it may also raise to abort the create.
+    """
     if on_unverified not in ("retry", "raise"):
         raise ValueError("on_unverified must be 'retry' or 'raise'")
     window = validate_verify_window(verify_window)
@@ -109,9 +114,15 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
         if existing is not None:
             return existing
 
+    existing = before_post() if before_post is not None else None
+    if existing is not None:
+        return existing
+
     attempts = 1
     try:
         return post(payload)
+    except AlegraStampError:
+        raise
     except AlegraAPIError as error:
         if not _may_have_been_processed(error):
             raise
@@ -125,6 +136,10 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
         raise _unverified_error(dedup_key, client_id, resource, payload,
                                 attempts, last_error) from last_error
 
+    existing = before_post() if before_post is not None else None
+    if existing is not None:
+        return existing
+
     logger.warning(
         f"POST - {log_path} - dedup key {dedup_key!r} unverified; "
         f"retrying create (attempt 2)"
@@ -132,6 +147,9 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
     attempts = 2
     try:
         return post(payload)
+    except AlegraStampError:
+        # Definitive "created but not stamped" outcome: never wrap or retry it
+        raise
     except AlegraAPIError as error:
         if not _may_have_been_processed(error):
             # The first attempt may still have created the document: quarantine it
