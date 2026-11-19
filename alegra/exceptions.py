@@ -85,6 +85,14 @@ class AlegraTimeoutError(AlegraAPIError):
     """
 
 
+class AlegraFileNotAvailableError(AlegraAPIError):
+    """The invoice has no downloadable file.
+
+    Alegra does not generate a PDF for draft invoices; the XML is only available once
+    the invoice is stamped.
+    """
+
+
 class AlegraUnverifiedCreateError(AlegraAPIError):
     """A create failed ambiguously and Alegra could not confirm whether it happened.
 

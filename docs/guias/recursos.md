@@ -4,7 +4,7 @@ Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones 
 
 | Recurso | Propiedad | Endpoint | Métodos extra |
 |---|---|---|---|
-| Facturas de venta | `client.invoices` | `invoices` | `void(id)`, `open(id)`, `send_email(id, emails, ...)` |
+| Facturas de venta | `client.invoices` | `invoices` | `void(id)`, `open(id)`, `send_email(id, emails, ...)`, `get_pdf(id)`, `download_pdf(id, path)`, `get_xml(id)`, `download_xml(id, path)` |
 | Contactos (clientes y proveedores) | `client.contacts` | `contacts` | `find_by_identification(identification)` |
 | Pagos / ingresos | `client.payments` | `payments` | `void(id)`, `open(id)` |
 | Ítems (productos y servicios) | `client.items` | `items` | `find_by_reference(reference)` |

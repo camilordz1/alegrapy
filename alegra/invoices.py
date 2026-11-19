@@ -2,12 +2,20 @@ import copy
 import logging
 import math
 import numbers
+import os
 import re
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlsplit
+
+import requests
 
 from alegra.actions import Actions, validate_id
-from alegra.exceptions import AlegraAPIError, AlegraUnverifiedCreateError
+from alegra.exceptions import (AlegraAPIError, AlegraFileNotAvailableError,
+                               AlegraUnverifiedCreateError, _error_for_exception,
+                               _error_for_status)
 from alegra.retry import _may_have_been_processed
 
 logger = logging.getLogger("alegra")
@@ -17,6 +25,24 @@ _MARKER_PREFIX = "alegrapy:dedup:"
 _MAX_OBSERVATIONS = 500
 _VERIFY_INITIAL_INTERVAL = 1.0
 _VERIFY_MAX_INTERVAL = 8.0
+_DEFAULT_MAX_BYTES = 25 * 1024 * 1024
+_XML_BOM = b"\xef\xbb\xbf"
+
+
+def _validate_max_bytes(max_bytes: Any) -> int:
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
+        raise ValueError("max_bytes must be a positive integer")
+    return max_bytes
+
+
+def _file_url_host(url: str) -> str:
+    """Validate a file URL and return its host, never echoing the URL."""
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname or "@" in parts.netloc:
+        raise AlegraAPIError(
+            "Invalid file URL: https, a host and no embedded credentials are required"
+        )
+    return parts.hostname
 
 
 def _validate_dedup_key(dedup_key: Any) -> str:
@@ -285,6 +311,202 @@ class Invoices(Actions):
             response_body=details.response_body,
             retry_after=details.retry_after,
         )
+
+    def get_pdf(self, id: Union[int, str], max_bytes: int = _DEFAULT_MAX_BYTES) -> bytes:
+        """Download the PDF of an invoice and return its bytes.
+
+        The file URL comes from the authenticated ``GET /invoices/{id}?fields=pdf`` call;
+        the download itself is anonymous: no API credentials, client headers or cookies
+        are sent to the file host. Signed URLs expire, so store the file, not the URL.
+
+        Args:
+            id (int or str): Invoice ID.
+            max_bytes (int): Maximum accepted file size (default 25 MB).
+
+        Returns:
+            bytes: PDF content, starting with ``%PDF-``.
+
+        Raises:
+            AlegraFileNotAvailableError: If the invoice has no PDF (drafts never do).
+            AlegraAPIError: If the URL, download or content is invalid.
+            ValueError: If the ID or ``max_bytes`` is invalid.
+        """
+        return self._fetch_file(id, "pdf", _validate_max_bytes(max_bytes))
+
+    def get_xml(self, id: Union[int, str], max_bytes: int = _DEFAULT_MAX_BYTES) -> bytes:
+        """Download the stamped XML of an invoice and return its bytes.
+
+        Uses the same anonymous download and safety rules as :meth:`get_pdf`.
+
+        Args:
+            id (int or str): Invoice ID.
+            max_bytes (int): Maximum accepted file size (default 25 MB).
+
+        Returns:
+            bytes: XML content (a UTF-8 BOM is allowed before ``<?xml``).
+
+        Raises:
+            AlegraFileNotAvailableError: If the invoice has no stamped XML.
+            AlegraAPIError: If the URL, download or content is invalid.
+            ValueError: If the ID or ``max_bytes`` is invalid.
+        """
+        return self._fetch_file(id, "xml", _validate_max_bytes(max_bytes))
+
+    def download_pdf(self, id: Union[int, str], path: Union[str, os.PathLike],
+                     overwrite: bool = False,
+                     max_bytes: int = _DEFAULT_MAX_BYTES) -> Path:
+        """Download an invoice PDF to ``path`` atomically.
+
+        Args:
+            id (int or str): Invoice ID.
+            path (str or PathLike): Destination file; its parent must exist.
+            overwrite (bool): Replace an existing file (default False).
+            max_bytes (int): Maximum accepted file size (default 25 MB).
+
+        Returns:
+            pathlib.Path: The final path.
+
+        Raises:
+            FileExistsError: If the file exists and ``overwrite`` is False (before any
+                request is made).
+            FileNotFoundError: If the parent directory does not exist.
+            AlegraFileNotAvailableError: If the invoice has no PDF.
+            AlegraAPIError: If the URL, download or content is invalid.
+        """
+        return self._download_to_path(id, "pdf", path, overwrite, max_bytes)
+
+    def download_xml(self, id: Union[int, str], path: Union[str, os.PathLike],
+                     overwrite: bool = False,
+                     max_bytes: int = _DEFAULT_MAX_BYTES) -> Path:
+        """Download an invoice XML to ``path`` atomically.
+
+        Args:
+            id (int or str): Invoice ID.
+            path (str or PathLike): Destination file; its parent must exist.
+            overwrite (bool): Replace an existing file (default False).
+            max_bytes (int): Maximum accepted file size (default 25 MB).
+
+        Returns:
+            pathlib.Path: The final path.
+
+        Raises:
+            FileExistsError: If the file exists and ``overwrite`` is False (before any
+                request is made).
+            FileNotFoundError: If the parent directory does not exist.
+            AlegraFileNotAvailableError: If the invoice has no stamped XML.
+            AlegraAPIError: If the URL, download or content is invalid.
+        """
+        return self._download_to_path(id, "xml", path, overwrite, max_bytes)
+
+    def _fetch_file(self, id: Union[int, str], field: str, max_bytes: int) -> bytes:
+        """Fetch an invoice file, refreshing an expired URL once."""
+        record = self.read(id, fields=field)
+        url = self._file_field_url(record, field)
+        prefix = b"%PDF-" if field == "pdf" else b"<?xml"
+
+        try:
+            return self._download_file(id, field, url, prefix, max_bytes)
+        except AlegraAPIError as error:
+            if error.status_code not in (403, 404):
+                raise
+
+        # The signature expired (or the object moved): ask Alegra for a fresh URL once.
+        record = self.read(id, fields=field)
+        url = self._file_field_url(record, field)
+        return self._download_file(id, field, url, prefix, max_bytes)
+
+    @staticmethod
+    def _file_field_url(record: Any, field: str) -> str:
+        value = record.get(field) if isinstance(record, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            label = field.upper()
+            raise AlegraFileNotAvailableError(
+                f"No {label} available for this invoice; draft invoices have none"
+            )
+        return value
+
+    def _download_file(self, id: Union[int, str], field: str, url: str,
+                       expected_prefix: bytes, max_bytes: int) -> bytes:
+        """Download one file anonymously, with size and content checks."""
+        host = _file_url_host(url)
+        api_path = urlsplit(self._resource_url(id)).path
+        logger.info(f"GET - {api_path} - downloading {field.upper()} from {host}")
+
+        try:
+            response = requests.get(url, timeout=self.client.timeout, stream=True,
+                                    allow_redirects=True)
+        except requests.RequestException as error:
+            raise _error_for_exception(error) from error
+
+        try:
+            final_url = getattr(response, "url", None)
+            if isinstance(final_url, str):
+                _file_url_host(final_url)
+
+            if not 200 <= response.status_code < 300:
+                raise _error_for_status(
+                    f"File download failed (Status {response.status_code})",
+                    response.status_code, None, getattr(response, "headers", None)
+                )
+
+            try:
+                chunks = []
+                total = 0
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise AlegraAPIError("File exceeds the maximum allowed size")
+                    chunks.append(chunk)
+            except requests.RequestException as error:
+                raise _error_for_exception(error) from error
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+
+        content = b"".join(chunks)
+        check = content[len(_XML_BOM):] if content.startswith(_XML_BOM) else content
+        if not check.startswith(expected_prefix):
+            raise AlegraAPIError("unexpected file content")
+        return content
+
+    def _download_to_path(self, id: Union[int, str], field: str,
+                          path: Union[str, os.PathLike], overwrite: bool,
+                          max_bytes: int) -> Path:
+        target = Path(path)
+        size_limit = _validate_max_bytes(max_bytes)
+        self._check_target(target, overwrite)
+        return self._atomic_write(target, self._fetch_file(id, field, size_limit))
+
+    @staticmethod
+    def _check_target(target: Path, overwrite: bool) -> None:
+        if not target.parent.is_dir():
+            raise FileNotFoundError(f"Parent directory does not exist: {target.parent}")
+        if not overwrite and target.exists():
+            raise FileExistsError(f"File already exists: {target}")
+
+    @staticmethod
+    def _atomic_write(target: Path, data: bytes) -> Path:
+        """Write bytes to a temp file in the target directory, fsync and replace."""
+        descriptor, temp_name = tempfile.mkstemp(
+            dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp"
+        )
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_path, target)
+        except BaseException:
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+            raise
+        return target
 
     def send_email(self, id: Union[int, str], emails: Union[List[str], str], send_copy_to_user: bool = False,
                    subject: Optional[str] = None, message: Optional[str] = None) -> Any:

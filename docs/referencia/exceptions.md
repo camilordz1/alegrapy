@@ -20,4 +20,6 @@ Jerarquía de errores de la librería. Todas las clases heredan de `AlegraAPIErr
 
 ::: alegra.exceptions.AlegraTimeoutError
 
+::: alegra.exceptions.AlegraFileNotAvailableError
+
 ::: alegra.exceptions.AlegraUnverifiedCreateError

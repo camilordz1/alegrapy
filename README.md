@@ -111,7 +111,7 @@ ofrece una cuarentena serializable; ver
 
 | Recurso | Propiedad | Operaciones extra |
 |---|---|---|
-| Facturas de venta | `client.invoices` | `void`, `open`, `send_email` |
+| Facturas de venta | `client.invoices` | `void`, `open`, `send_email`, `get_pdf`, `download_pdf`, `get_xml`, `download_xml` |
 | Contactos | `client.contacts` | `find_by_identification`, `add_attachment` |
 | Productos / ítems | `client.items` | `find_by_reference`, `add_attachment` |
 | Pagos | `client.payments` | `void`, `open` |

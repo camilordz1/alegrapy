@@ -57,6 +57,7 @@ nav:
       - Paginación: guias/paginacion.md
       - Búsquedas exactas: guias/busquedas.md
       - Facturas sin duplicados: guias/facturas-sin-duplicados.md
+      - Archivos de facturas: guias/archivos-de-facturas.md
       - Errores: guias/errores.md
       - Reintentos: guias/reintentos.md
       - Concurrencia: guias/concurrencia.md
