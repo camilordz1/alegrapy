@@ -44,6 +44,10 @@ Si clonaste el repositorio, puedes instalar el paquete de forma local:
 pip install .
 ```
 
+## Versiones y cambios
+
+Consulta la guía de [Versiones y cambios](versiones.md) y el [CHANGELOG](https://github.com/camilordz1/alegrapy/blob/master/CHANGELOG.md). Mientras el paquete esté en `0.y.z`, se recomienda fijar `AlegraPy>=0.1,<0.2`.
+
 ## Siguiente paso
 
 Configura tus credenciales en [Autenticación](autenticacion.md).

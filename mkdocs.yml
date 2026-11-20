@@ -64,6 +64,7 @@ nav:
       - Concurrencia: guias/concurrencia.md
       - Seguridad: guias/seguridad.md
       - Migración desde el modo legacy: guias/migracion-legacy.md
+      - Versiones y cambios: guias/versiones.md
   - Referencia de la API:
       - Introducción: referencia/index.md
       - Cliente y errores: referencia/session.md

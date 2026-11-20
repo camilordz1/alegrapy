@@ -141,6 +141,10 @@ pip install -r requirements-docs.txt
 mkdocs serve
 ```
 
+## Versiones y cambios
+
+Consulta [CHANGELOG.md](CHANGELOG.md) y la guía de [Versiones y cambios](docs/guias/versiones.md) (política de Semantic Versioning y qué esperar antes de `1.0.0`). Se recomienda fijar `AlegraPy>=0.1,<0.2`.
+
 ## Licencia
 
 MIT. Ver [LICENSE.txt](LICENSE.txt).
