@@ -124,7 +124,7 @@ class TestReleaseChecks(unittest.TestCase):
                         zf.writestr(entry, "secret")
                 return path
 
-            def sdist(name, extra):
+            def sdist(extra):
                 # Unique staging dir per call: names differing only by case would collide on
                 # case-insensitive filesystems (macOS, Windows)
                 source = pathlib.Path(tempfile.mkdtemp(dir=tmp))
@@ -141,17 +141,17 @@ class TestReleaseChecks(unittest.TestCase):
                 return path
 
             # Control: same shapes without secrets pass
-            release_checks.check_archives([wheel("clean.whl", []), sdist("clean", [])])
+            release_checks.check_archives([wheel("clean.whl", []), sdist([])])
 
             # .env.example / .env.sample are rejected on purpose: the guard fails closed, and
             # templates do not belong in a published package
             secrets = ("config.ini", ".env", "alegra.log", "Config.INI", ".ENV",
-                       ".env.local", ".env.production", ".env.example")
+                       ".env.local", ".env.production", ".env.example", ".env.sample")
             for index, secret in enumerate(secrets):
                 nested = f"alegrapy/sub/{secret}"
                 archives = {
                     "wheel": wheel(f"bad-{index}.whl", [nested]),
-                    "sdist": sdist(f"bad-{index}", [nested]),
+                    "sdist": sdist([nested]),
                 }
                 for kind, archive in archives.items():
                     with self.subTest(secret=secret, kind=kind):
