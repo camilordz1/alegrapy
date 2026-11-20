@@ -1,0 +1,136 @@
+import importlib.util
+import pathlib
+import tarfile
+import tempfile
+import unittest
+import zipfile
+
+_SCRIPT_PATH = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "release_checks.py"
+_SPEC = importlib.util.spec_from_file_location("release_checks", _SCRIPT_PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+release_checks = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(release_checks)
+
+
+def _write_tar_gz(path: pathlib.Path, entries: list[str]) -> None:
+    with tarfile.open(path, "w:gz") as tf:
+        for entry in entries:
+            info = tarfile.TarInfo(name=entry)
+            info.size = 0
+            tf.addfile(info)
+
+
+def _write_wheel(path: pathlib.Path, entries: list[str]) -> None:
+    with zipfile.ZipFile(path, "w") as zf:
+        for entry in entries:
+            zf.writestr(entry, "")
+
+
+class TestReleaseChecks(unittest.TestCase):
+
+    def test_check_version_matches_and_rejects_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            version_file = pathlib.Path(tmp) / "_version.py"
+            version_file.write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+
+            self.assertEqual(release_checks.check_version("v0.1.0", version_file), "0.1.0")
+            with self.assertRaises(ValueError):
+                release_checks.check_version("v0.1.1", version_file)
+
+    def test_extract_release_notes_variants_and_failures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cl = pathlib.Path(tmp) / "CHANGELOG.md"
+
+            cl.write_text("## [Unreleased]\n\n- Pending\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                release_checks.extract_release_notes("0.1.0", cl)
+
+            cl.write_text(
+                "## [0.1.0] - 2026-01-01\n\n## [0.0.4] - 2025-01-01\n- Old\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                release_checks.extract_release_notes("0.1.0", cl)
+
+            cl.write_text(
+                "## [Unreleased]\n\n## [0.1.0] - 2026-01-01\n\n- Feature A\n\n## [0.0.4]\n- Old\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                release_checks.extract_release_notes("0.1.0", cl),
+                "- Feature A",
+            )
+
+            cl.write_text("## [0.1.0]\n\n- Last section\n", encoding="utf-8")
+            self.assertEqual(
+                release_checks.extract_release_notes("0.1.0", cl),
+                "- Last section",
+            )
+
+    def test_check_archives_allows_nested_main_and_rejects_forbidden_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            sdist = root / "alegrapy-0.1.0.tar.gz"
+            wheel = root / "alegrapy-0.1.0-py3-none-any.whl"
+
+            _write_tar_gz(sdist, [
+                "alegrapy-0.1.0/pyproject.toml",
+                "alegrapy-0.1.0/alegrapy/__init__.py",
+                "alegrapy-0.1.0/alegrapy/main.py",
+            ])
+            _write_wheel(wheel, [
+                "alegrapy/__init__.py",
+                "alegrapy/main.py",
+                "alegrapy-0.1.0.dist-info/METADATA",
+            ])
+            release_checks.check_archives([sdist, wheel])
+
+            for bad_entry in (
+                "config.ini",
+                "alegra.log",
+                ".env",
+                "RELEASING.md",
+                "main.py",
+                "tests/test_a.py",
+                "scripts/release_checks.py",
+                "odd/briefs/x.md",
+                "site/index.html",
+                "env/bin/python",
+            ):
+                with self.subTest(bad_entry=bad_entry):
+                    bad_sdist = root / "bad.tar.gz"
+                    _write_tar_gz(bad_sdist, [
+                        "alegrapy-0.1.0/pyproject.toml",
+                        f"alegrapy-0.1.0/{bad_entry}",
+                    ])
+                    with self.assertRaises(ValueError):
+                        release_checks.check_archives([bad_sdist])
+
+                    bad_whl = root / "bad.whl"
+                    _write_wheel(bad_whl, ["alegrapy/__init__.py", bad_entry])
+                    with self.assertRaises(ValueError):
+                        release_checks.check_archives([bad_whl])
+
+    def test_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            cl = root / "CHANGELOG.md"
+            out = root / "notes.md"
+            cl.write_text("## [0.1.0] - 2026-01-01\n\n- Added X\n", encoding="utf-8")
+
+            rc = release_checks.main([
+                "release-notes", "--version", "0.1.0",
+                "--changelog", str(cl), "--out", str(out),
+            ])
+            self.assertEqual(rc, 0)
+            self.assertEqual(out.read_text(encoding="utf-8"), "- Added X\n")
+
+            bad_rc = release_checks.main([
+                "release-notes", "--version", "0.2.0",
+                "--changelog", str(cl), "--out", str(out),
+            ])
+            self.assertEqual(bad_rc, 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
