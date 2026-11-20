@@ -12,8 +12,9 @@ import requests
 import alegrapy
 from alegrapy import AlegraClient, invoices as legacy_invoices
 
-# `alegra.invoices.time` cannot be patched by dotted string: `alegra.invoices` is shadowed
-# by the legacy class alias, and Python 3.10's mock resolves the dotted path as a module.
+# `alegrapy.invoices.time` cannot be patched by dotted string: `alegrapy.invoices` is
+# shadowed by the legacy `Invoices` alias on the package object, and Python 3.10's mock
+# resolves the dotted path through attributes; use `importlib.import_module` + `patch.object`.
 _INVOICES_TIME = importlib.import_module('alegrapy.invoices').time
 
 PDF_URL = "https://cdn.example.com/files/invoice.pdf?Expires=1&Signature=SECRET"

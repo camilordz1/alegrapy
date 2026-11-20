@@ -8,8 +8,9 @@ import requests
 
 import alegrapy
 
-# `alegra.invoices` is shadowed by the legacy Invoices alias, and Python 3.10's mock.patch
-# resolves dotted strings through attributes, so patch the module's `time` directly
+# `alegrapy.invoices` is shadowed by the legacy `Invoices` alias on the package object, and
+# Python 3.10's mock.patch resolves dotted strings through attributes, so patch via
+# `importlib.import_module` + `patch.object` on the submodule's `time` directly.
 _INVOICES_TIME = importlib.import_module('alegrapy.invoices').time
 from alegrapy import AlegraClient
 

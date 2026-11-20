@@ -11,7 +11,7 @@ import warnings
 warnings.warn(
     "The 'alegra' import name is deprecated; use 'import alegrapy'. "
     "It will be removed in 1.0.",
-    DeprecationWarning,
+    FutureWarning,
     stacklevel=2,
 )
 
@@ -22,26 +22,23 @@ from alegrapy import __all__ as _ALEGRAPY_ALL  # noqa: E402
 __all__ = list(_ALEGRAPY_ALL)
 
 # Expose the same module objects under the old package name, so isinstance checks and
-# ``from alegra.<module> import ...`` behave identically. To monkeypatch, patch the module
-# object (``importlib.import_module("alegrapy.<module>")``): ``alegra.invoices`` as an
-# attribute is the legacy class alias, not the submodule.
+# ``from alegra.<module> import ...`` behave identically. Submodules outside ``__all__``
+# (exceptions, retry, dedup, ...) are also exposed as package attributes; names in
+# ``__all__`` keep pointing at the legacy class aliases below. To monkeypatch, patch the
+# module object (``importlib.import_module("alegrapy.<module>")``): ``alegrapy.invoices``
+# as an attribute is the legacy class alias, not the submodule.
 for _module_info in pkgutil.iter_modules(_alegrapy.__path__):
     _short_name = _module_info.name
     if _short_name.startswith("_"):
         continue
     _module = importlib.import_module(f"alegrapy.{_short_name}")
     sys.modules[f"{__name__}.{_short_name}"] = _module
+    if _short_name not in _ALEGRAPY_ALL:
+        setattr(sys.modules[__name__], _short_name, _module)
 
 # Keep the legacy class/alias attributes (``alegra.session``, ``alegra.invoices``, ...)
 # pointing at what ``alegrapy`` exposes today, not at the submodule objects.
 for _name in _ALEGRAPY_ALL:
     setattr(sys.modules[__name__], _name, getattr(_alegrapy, _name))
-
-# Submodules that are not legacy names (exceptions, retry, dedup, ...) were attributes of
-# the old package after import, so ``alegra.exceptions.AlegraNotFoundError`` keeps working
-for _module_info in pkgutil.iter_modules(_alegrapy.__path__):
-    _short_name = _module_info.name
-    if not _short_name.startswith("_") and _short_name not in _ALEGRAPY_ALL:
-        setattr(sys.modules[__name__], _short_name, sys.modules[f"alegrapy.{_short_name}"])
 
 del _module_info, _module, _short_name, _name

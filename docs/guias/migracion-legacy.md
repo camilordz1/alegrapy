@@ -5,7 +5,7 @@ AlegraPy conserva el estilo anterior (credenciales globales y clases en minúscu
 ## Nombre del import
 
 El paquete se importa como `alegrapy`; el antiguo `alegra` sigue disponible como alias de
-compatibilidad con un `DeprecationWarning`:
+compatibilidad con un `FutureWarning`:
 
 ```python
 from alegrapy import AlegraClient

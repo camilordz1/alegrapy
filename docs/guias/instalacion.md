@@ -31,7 +31,7 @@ import alegrapy
 ```
 
 El antiguo `import alegra` sigue funcionando como alias de compatibilidad: emite un
-`DeprecationWarning` y se eliminará en la versión 1.0.
+`FutureWarning` y se eliminará en la versión 1.0.
 
 !!! note "Versión de Python"
     El paquete requiere Python 3.10 o superior (`requires-python` en `pyproject.toml`).

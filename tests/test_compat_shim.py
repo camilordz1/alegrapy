@@ -26,12 +26,12 @@ class TestCompatShim(unittest.TestCase):
             installed = importlib.metadata.version("AlegraPy")
         except importlib.metadata.PackageNotFoundError:
             return
-        # A stale installed distribution would shadow the checkout's version
+        # Check that installed distribution metadata has not drifted from alegrapy/_version.py
         self.assertEqual(installed, source)
 
     def test_import_alegra_reexports_identity(self):
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             import alegra
 
         self.assertIs(alegra.AlegraClient, alegrapy.AlegraClient)
@@ -39,7 +39,7 @@ class TestCompatShim(unittest.TestCase):
 
     def test_submodules_are_the_same_module_objects(self):
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             import alegra
             import alegra.session  # noqa: F401
             import alegra.invoices  # noqa: F401
@@ -58,7 +58,7 @@ class TestCompatShim(unittest.TestCase):
 
     def test_submodules_outside_all_are_package_attributes(self):
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             import alegra
             import alegra.exceptions  # noqa: F401
 
@@ -70,7 +70,7 @@ class TestCompatShim(unittest.TestCase):
 
     def test_legacy_names_still_work(self):
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             from alegra import session, invoices, contacts
 
         self.assertIs(session, alegrapy.session)
@@ -82,13 +82,13 @@ class TestCompatShim(unittest.TestCase):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         strict = subprocess.run(
-            [sys.executable, "-W", "error::DeprecationWarning", "-c", code],
+            [sys.executable, "-W", "error::FutureWarning", "-c", code],
             cwd=root, capture_output=True, text=True)
         self.assertNotEqual(strict.returncode, 0)
         self.assertIn("The 'alegra' import name is deprecated", strict.stderr)
 
         default = subprocess.run(
-            [sys.executable, "-W", "default", "-c", code],
+            [sys.executable, "-c", code],
             cwd=root, capture_output=True, text=True)
         self.assertEqual(default.returncode, 0, default.stderr)
         self.assertEqual(default.stderr.count("The 'alegra' import name is deprecated"), 1)

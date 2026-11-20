@@ -8,7 +8,8 @@ from unittest.mock import patch
 import alegrapy
 from alegrapy import AlegraClient
 
-# Patch module objects directly: `alegra.<resource>` names are shadowed by legacy aliases.
+# Patch module objects directly: on `alegrapy`, `<resource>` names are shadowed by legacy
+# class aliases (e.g. `alegrapy.invoices` is `Invoices`, not the submodule).
 _FLOW_TIME = importlib.import_module('alegrapy._create_once').time
 _INVOICES_MODULE = importlib.import_module('alegrapy.invoices')
 
