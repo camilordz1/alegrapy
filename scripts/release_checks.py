@@ -18,8 +18,9 @@ DEFAULT_CHANGELOG = pathlib.Path("CHANGELOG.md")
 # - config.ini: local credential file used in development
 # - alegra.log: legacy log file written by old versions (may contain request data)
 # - .env: local environment variables / secrets
-# Matching is case-insensitive (Config.ini, .ENV on case-insensitive filesystems) and also
-# covers .env variants such as .env.local / .env.production.
+# Matching always lowercases each path component (so Config.ini and .ENV are caught), and
+# any name starting with ".env." (.env.local, .env.production, also .env.example) is treated
+# as a secret too: the guard fails closed, and env templates do not belong in the package.
 FORBIDDEN_ANY_DEPTH_FILES = frozenset({
     "config.ini",
     "alegra.log",
