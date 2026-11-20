@@ -13,12 +13,13 @@ evita facturas duplicadas por reintentos ciegos.
 
 ## Inicio rápido
 
-1. Instala la versión actual desde GitHub (la versión publicada en PyPI, `AlegraPy 0.0.4`, es
-   anterior a estas funciones):
+1. Instala el paquete desde PyPI (se importa como `alegrapy`):
 
    ```bash
-   pip install git+https://github.com/camilordz1/alegrapy.git
+   pip install AlegraPy
    ```
+
+   Hasta la 1.0 se recomienda fijar la serie: `pip install "AlegraPy>=0.1,<0.2"`.
 
 2. Obtén tus credenciales en Alegra: **Configuración → API - Integraciones con otros sistemas**
    (correo y token).
