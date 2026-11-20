@@ -44,7 +44,7 @@ rehearse again with the same code, publish the next dry run from a throwaway bra
    ```
 6. Open the triggered **Release** workflow run in GitHub Actions and approve the `pypi` environment deployment.
    - If a PyPI upload fails partway through, check which distribution files already exist on PyPI before re-running the job (`skip-existing` is intentionally disabled on both PyPI and TestPyPI).
-   - The `github-release` job is safe to re-run: it edits the existing release and replaces its assets.
+   - The `github-release` job is safe to re-run: it edits the existing release and overwrites assets with the same file name (`--clobber`). Assets with other names left by an earlier attempt are NOT removed; delete them by hand if needed.
 7. Wait for `publish-pypi` and `github-release` to finish, then verify installation in a fresh virtual environment:
    ```bash
    python -m venv /tmp/verify-alegrapy

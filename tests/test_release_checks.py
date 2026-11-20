@@ -189,7 +189,7 @@ class TestReleaseChecks(unittest.TestCase):
             self.assertEqual(bad_rc, 1)
 
 
-    def test_cli_check_version_and_check_archives(self):
+    def test_cli_check_version(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             version_file = root / "_version.py"
@@ -199,6 +199,9 @@ class TestReleaseChecks(unittest.TestCase):
             self.assertEqual(release_checks.main(
                 ["check-version", "--tag", "v0.1.1", "--version-file", str(version_file)]), 1)
 
+    def test_cli_check_archives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
             clean = root / "clean.whl"
             with zipfile.ZipFile(clean, "w") as zf:
                 zf.writestr("alegrapy/__init__.py", "")
@@ -218,8 +221,9 @@ class TestReleaseChecks(unittest.TestCase):
             with tarfile.open(sdist, "w:gz") as tf:
                 tf.add(root / "alegrapy-0.1.0", arcname="alegrapy-0.1.0")
                 tf.add(root / ".env", arcname=".env")
-            with self.assertRaises(ValueError):
+            with self.assertRaises(ValueError) as ctx:
                 release_checks.check_archives([sdist])
+            self.assertIn("'.env'", str(ctx.exception))
 
     def test_root_entries_match_case_insensitively(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -228,8 +232,9 @@ class TestReleaseChecks(unittest.TestCase):
                     path = pathlib.Path(tmp) / f"w-{entry.replace('/', '_')}.whl"
                     with zipfile.ZipFile(path, "w") as zf:
                         zf.writestr(entry, "")
-                    with self.assertRaises(ValueError):
+                    with self.assertRaises(ValueError) as ctx:
                         release_checks.check_archives([path])
+                    self.assertIn(entry, str(ctx.exception))
 
 
 if __name__ == "__main__":
