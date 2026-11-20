@@ -23,8 +23,12 @@ from alegrapy.credit_notes import CreditNoteOperationType, CreditNoteType
 from alegrapy.dedup import make_dedup_key
 from alegrapy.exceptions import (AlegraAPIError, AlegraAlreadyAnnulledError,
                                AlegraFileNotAvailableError, AlegraStampError,
-                               AlegraTimeoutError, _error_for_exception,
+                               AlegraStampTimeoutError, AlegraTimeoutError,
+                               AlegraValidationError, _error_for_exception,
                                _error_for_status)
+from alegrapy.stamping import (StampResult, StampStatus, parse_stamp_error_400,
+                               parse_stamp_response, stamp_status_from_invoice,
+                               validate_poll_timing, validate_stamp_ids)
 
 logger = logging.getLogger("alegra")
 
@@ -803,6 +807,95 @@ class Invoices(Actions):
         """
         endpoint = self._resource_url(id, "open")
         return self.client.query('post', endpoint)
+
+    def stamp(self, ids: List[Union[int, str]]) -> List[StampResult]:
+        """Emit 1 to 10 electronic invoices to the tax authority via ``POST /invoices/stamp``.
+
+        Never re-POSTs on ambiguous failures (timeouts, connection errors after send,
+        or 5xx): callers must check :meth:`stamp_status` before stamping again.
+
+        Args:
+            ids (Sequence[int or str]): 1 to 10 unique invoice IDs.
+
+        Returns:
+            list[StampResult]: Per-invoice results, even when HTTP 200 mixes successes
+                and failures or HTTP 400 carries a per-ID ``data`` list.
+
+        Raises:
+            ValueError: If ``ids`` is empty, exceeds 10 items, contains duplicates, or
+                has an invalid ID.
+            AlegraAPIError: On ambiguous failures or non-per-ID 4xx/5xx responses.
+        """
+        normalized_ids = validate_stamp_ids(ids)
+        endpoint = f"{self.endpoint}/stamp"
+        logger.info("Stamping %d invoice(s) via %s", len(normalized_ids), endpoint)
+        try:
+            payload = self.client.query('post', endpoint, data={"ids": normalized_ids})
+        except AlegraValidationError as exc:
+            parsed = parse_stamp_error_400(exc.response_body)
+            if parsed is not None:
+                return parsed
+            raise
+        return parse_stamp_response(payload, normalized_ids)
+
+    def stamp_status(self, id: Union[int, str]) -> StampStatus:
+        """Read an invoice and return its typed electronic-stamping status.
+
+        Args:
+            id (int or str): Invoice ID.
+
+        Returns:
+            StampStatus: Normalized state, emission/final flags, observations, and CUFE.
+
+        Raises:
+            ValueError: If the ID is invalid or the server response is not a dict.
+            AlegraAPIError: On API or transport failures.
+        """
+        clean_id = validate_id(id)
+        invoice = self.read(clean_id)
+        if not isinstance(invoice, dict):
+            raise ValueError("Unexpected invoice response")
+        return stamp_status_from_invoice(invoice, fallback_id=clean_id)
+
+    def wait_until_stamped(self, id: Union[int, str], timeout: float = 60.0,
+                           interval: float = 2.0) -> StampStatus:
+        """Poll :meth:`stamp_status` until a final state is reached.
+
+        ``ACCEPTED``, ``ACCEPTED_WITH_OBSERVATIONS``, and ``REJECTED`` are final and
+        returned directly (``REJECTED`` is not raised). ``DRAFT``, ``PENDING``, and
+        ``UNKNOWN`` continue polling until ``timeout`` expires.
+
+        Args:
+            id (int or str): Invoice ID.
+            timeout (float): Maximum seconds to wait (must be positive and finite).
+            interval (float): Seconds between polls (must be positive and finite).
+
+        Returns:
+            StampStatus: The final stamping status.
+
+        Raises:
+            ValueError: If ``id``, ``timeout``, or ``interval`` is invalid.
+            AlegraStampTimeoutError: If ``timeout`` expires before a final state,
+                carrying ``.last_status``.
+            AlegraAPIError: On API or transport failures during polling.
+        """
+        clean_id = validate_id(id)
+        max_wait, step = validate_poll_timing(timeout, interval)
+        deadline = time.monotonic() + max_wait
+
+        while True:
+            status = self.stamp_status(clean_id)
+            if status.is_final:
+                logger.info("Invoice %s reached final stamp state %s",
+                            status.invoice_id, status.state.value)
+                return status
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise AlegraStampTimeoutError(
+                    f"Invoice {clean_id} did not reach a final stamp state within {max_wait}s",
+                    last_status=status,
+                )
+            time.sleep(min(step, remaining))
 
 
 # For backward compatibility

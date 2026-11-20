@@ -85,6 +85,17 @@ class AlegraTimeoutError(AlegraAPIError):
     """
 
 
+class AlegraStampTimeoutError(AlegraTimeoutError):
+    """Electronic stamping did not reach a final state within the polling window.
+
+    Attributes:
+        last_status (StampStatus, optional): Most recent status observed before timing out.
+    """
+    def __init__(self, message: str, *, last_status: Any = None) -> None:
+        super().__init__(message)
+        self.last_status = last_status
+
+
 class AlegraFileNotAvailableError(AlegraAPIError):
     """The invoice has no downloadable file.
 

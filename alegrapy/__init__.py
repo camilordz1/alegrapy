@@ -5,6 +5,7 @@ from alegrapy.retry import RetryPolicy
 from alegrapy.dedup import make_dedup_key, make_dedup_key_from
 from alegrapy.credit_notes import (CreditNotes, credit_notes, CreditNoteType,
                                  CreditNoteOperationType)
+from alegrapy.stamping import StampResult, StampState, StampStatus
 from alegrapy.exceptions import (
     AlegraAuthError,
     AlegraNotFoundError,
@@ -15,6 +16,7 @@ from alegrapy.exceptions import (
     AlegraTimeoutError,
     AlegraFileNotAvailableError,
     AlegraStampError,
+    AlegraStampTimeoutError,
     AlegraAlreadyAnnulledError,
     AlegraUnverifiedCreateError,
 )
@@ -44,8 +46,12 @@ __all__ = [
     'AlegraTimeoutError',
     'AlegraFileNotAvailableError',
     'AlegraStampError',
+    'AlegraStampTimeoutError',
     'AlegraAlreadyAnnulledError',
     'AlegraUnverifiedCreateError',
+    'StampState',
+    'StampStatus',
+    'StampResult',
     'RetryPolicy',
     'make_dedup_key',
     'make_dedup_key_from',
