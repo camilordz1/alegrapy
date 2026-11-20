@@ -87,9 +87,11 @@ class TestCompatShim(unittest.TestCase):
         self.assertNotEqual(strict.returncode, 0)
         self.assertIn("The 'alegra' import name is deprecated", strict.stderr)
 
+        # Python's own default filters, isolated from any ambient PYTHONWARNINGS
+        clean_env = {key: value for key, value in os.environ.items() if key != "PYTHONWARNINGS"}
         default = subprocess.run(
             [sys.executable, "-c", code],
-            cwd=root, capture_output=True, text=True)
+            cwd=root, capture_output=True, text=True, env=clean_env)
         self.assertEqual(default.returncode, 0, default.stderr)
         self.assertEqual(default.stderr.count("The 'alegra' import name is deprecated"), 1)
 

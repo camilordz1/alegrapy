@@ -13,9 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [0.1.0] - YYYY-MM-DD
-
-First `0.1.0` release, compared against the last PyPI release (`0.0.4`).
+Planned as `0.1.0` (not yet published); this section becomes `[0.1.0] - <release date>` when
+it ships. Compared against the last PyPI release (`0.0.4`).
 
 ### Breaking changes
 
