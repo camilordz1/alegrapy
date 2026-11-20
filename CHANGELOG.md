@@ -49,4 +49,4 @@ Read this section first when upgrading from `0.0.4`:
 - Validate resource IDs before constructing request URLs to prevent path traversal and injection.
 - Never log request/response bodies, `Authorization` headers, tokens, or signed URL query parameters.
 - Never send Alegra credentials to CDN or S3 file hosts when downloading invoice PDFs/XMLs; validate every redirect hop manually (`https` required) and write downloads without clobbering existing files when `overwrite=False`.
-- Reject all cookies on the shared HTTP session (`DefaultCookiePolicy`) so state cannot leak across tenants.
+- Reject all cookies on each client's HTTP session (`DefaultCookiePolicy`), so no server-set state is shared between requests or threads using the same client (each `AlegraClient` already has its own session).
