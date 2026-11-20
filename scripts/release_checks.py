@@ -18,11 +18,18 @@ DEFAULT_CHANGELOG = pathlib.Path("CHANGELOG.md")
 # - config.ini: local credential file used in development
 # - alegra.log: legacy log file written by old versions (may contain request data)
 # - .env: local environment variables / secrets
+# Matching is case-insensitive (Config.ini, .ENV on case-insensitive filesystems) and also
+# covers .env variants such as .env.local / .env.production.
 FORBIDDEN_ANY_DEPTH_FILES = frozenset({
     "config.ini",
     "alegra.log",
     ".env",
 })
+
+
+def _is_secret_name(name: str) -> bool:
+    lowered = name.lower()
+    return lowered in FORBIDDEN_ANY_DEPTH_FILES or lowered.startswith(".env.")
 
 # Root-level files that must not ship (nested files with these names are legitimate):
 # - RELEASING.md: maintainer release checklist (repo-only)
@@ -99,7 +106,7 @@ def _check_members(
             continue
         root_entry = parts[0]
         if (root_entry in FORBIDDEN_ROOT_FILES or root_entry in FORBIDDEN_ROOT_DIRS
-                or any(part in FORBIDDEN_ANY_DEPTH_FILES for part in parts)):
+                or any(_is_secret_name(part) for part in parts)):
             forbidden.append(raw)
     if forbidden:
         raise ValueError(f"Forbidden entries in {archive}: {forbidden}")

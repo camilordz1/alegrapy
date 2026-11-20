@@ -114,23 +114,51 @@ class TestReleaseChecks(unittest.TestCase):
     def test_secret_files_are_rejected_at_any_depth(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = pathlib.Path(tmp)
-            for secret in ("config.ini", ".env", "alegra.log"):
-                with self.subTest(secret=secret):
-                    wheel = tmp / f"pkg-{secret.strip('.')}.whl"
-                    with zipfile.ZipFile(wheel, "w") as zf:
-                        zf.writestr("alegrapy/__init__.py", "")
-                        zf.writestr(f"alegrapy/sub/{secret}", "secret")
-                    with self.assertRaises(ValueError):
-                        release_checks.check_archives([wheel])
 
-                    sdist = tmp / f"pkg-{secret.strip('.')}.tar.gz"
-                    source = tmp / f"src-{secret.strip('.')}"
-                    (source / "alegrapy").mkdir(parents=True)
-                    (source / "alegrapy" / secret).write_text("secret")
-                    with tarfile.open(sdist, "w:gz") as tf:
-                        tf.add(source, arcname="alegrapy-0.1.0")
-                    with self.assertRaises(ValueError):
-                        release_checks.check_archives([sdist])
+            def wheel(name, extra):
+                path = tmp / name
+                with zipfile.ZipFile(path, "w") as zf:
+                    zf.writestr("alegrapy/__init__.py", "")
+                    zf.writestr("alegrapy-0.1.0.dist-info/METADATA", "Name: AlegraPy")
+                    for entry in extra:
+                        zf.writestr(entry, "secret")
+                return path
+
+            def sdist(name, extra):
+                source = tmp / f"src-{name}"
+                (source / "alegrapy").mkdir(parents=True)
+                (source / "PKG-INFO").write_text("Name: AlegraPy")
+                (source / "alegrapy" / "__init__.py").write_text("")
+                for entry in extra:
+                    target = source / entry
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("secret")
+                path = tmp / f"{name}.tar.gz"
+                with tarfile.open(path, "w:gz") as tf:
+                    tf.add(source, arcname="alegrapy-0.1.0")
+                return path
+
+            # Control: same shapes without secrets pass
+            release_checks.check_archives([wheel("clean.whl", []), sdist("clean", [])])
+
+            for secret in ("config.ini", ".env", "alegra.log", "Config.INI", ".ENV",
+                           ".env.local", ".env.production"):
+                nested = f"alegrapy/sub/{secret}"
+                for build in (lambda: wheel(f"bad-{secret}.whl", [nested]),
+                              lambda: sdist(f"bad-{secret}", [nested])):
+                    with self.subTest(secret=secret):
+                        with self.assertRaises(ValueError) as ctx:
+                            release_checks.check_archives([build()])
+                        self.assertIn(secret, str(ctx.exception))
+
+    def test_secret_names_do_not_flag_similar_legitimate_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "ok.whl"
+            with zipfile.ZipFile(path, "w") as zf:
+                for entry in ("alegrapy/env.py", "alegrapy/config_example.py",
+                              "alegrapy/environment/__init__.py"):
+                    zf.writestr(entry, "")
+            release_checks.check_archives([path])
 
     def test_cli_exit_codes(self):
         with tempfile.TemporaryDirectory() as tmp:
