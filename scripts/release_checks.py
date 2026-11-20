@@ -13,16 +13,21 @@ from typing import Sequence
 DEFAULT_VERSION_FILE = pathlib.Path("alegrapy/_version.py")
 DEFAULT_CHANGELOG = pathlib.Path("CHANGELOG.md")
 
-# Root-level files that must never be shipped in an sdist or wheel:
+# Files that may hold secrets or private data: rejected at ANY depth, because a copy inside
+# the package directory would ship just the same:
 # - config.ini: local credential file used in development
-# - alegra.log: legacy log file written by old versions
+# - alegra.log: legacy log file written by old versions (may contain request data)
 # - .env: local environment variables / secrets
-# - RELEASING.md: maintainer release checklist (repo-only)
-# - main.py: root-level example script (nested alegrapy/main.py is allowed)
-FORBIDDEN_ROOT_FILES = frozenset({
+FORBIDDEN_ANY_DEPTH_FILES = frozenset({
     "config.ini",
     "alegra.log",
     ".env",
+})
+
+# Root-level files that must not ship (nested files with these names are legitimate):
+# - RELEASING.md: maintainer release checklist (repo-only)
+# - main.py: root-level example script (nested alegrapy/main.py is allowed)
+FORBIDDEN_ROOT_FILES = frozenset({
     "RELEASING.md",
     "main.py",
 })
@@ -93,14 +98,15 @@ def _check_members(
         if not parts:
             continue
         root_entry = parts[0]
-        if root_entry in FORBIDDEN_ROOT_FILES or root_entry in FORBIDDEN_ROOT_DIRS:
+        if (root_entry in FORBIDDEN_ROOT_FILES or root_entry in FORBIDDEN_ROOT_DIRS
+                or any(part in FORBIDDEN_ANY_DEPTH_FILES for part in parts)):
             forbidden.append(raw)
     if forbidden:
         raise ValueError(f"Forbidden entries in {archive}: {forbidden}")
 
 
 def check_archives(paths: Sequence[pathlib.Path]) -> None:
-    """Fail if any sdist or wheel contains forbidden root-level files or directories."""
+    """Fail if any sdist or wheel contains secret files (any depth) or forbidden root entries."""
     if not paths:
         raise ValueError("No archive paths provided")
     for path in paths:

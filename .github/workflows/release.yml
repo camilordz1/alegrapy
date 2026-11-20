@@ -135,6 +135,8 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          # No checkout in this job: tell gh which repository to use
+          GH_REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           gh release create "$REF_NAME" dist/* \

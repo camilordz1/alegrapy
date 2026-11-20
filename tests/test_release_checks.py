@@ -111,6 +111,27 @@ class TestReleaseChecks(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         release_checks.check_archives([bad_whl])
 
+    def test_secret_files_are_rejected_at_any_depth(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            for secret in ("config.ini", ".env", "alegra.log"):
+                with self.subTest(secret=secret):
+                    wheel = tmp / f"pkg-{secret.strip('.')}.whl"
+                    with zipfile.ZipFile(wheel, "w") as zf:
+                        zf.writestr("alegrapy/__init__.py", "")
+                        zf.writestr(f"alegrapy/sub/{secret}", "secret")
+                    with self.assertRaises(ValueError):
+                        release_checks.check_archives([wheel])
+
+                    sdist = tmp / f"pkg-{secret.strip('.')}.tar.gz"
+                    source = tmp / f"src-{secret.strip('.')}"
+                    (source / "alegrapy").mkdir(parents=True)
+                    (source / "alegrapy" / secret).write_text("secret")
+                    with tarfile.open(sdist, "w:gz") as tf:
+                        tf.add(source, arcname="alegrapy-0.1.0")
+                    with self.assertRaises(ValueError):
+                        release_checks.check_archives([sdist])
+
     def test_cli_exit_codes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
