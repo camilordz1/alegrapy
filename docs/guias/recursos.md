@@ -4,7 +4,7 @@ Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones 
 
 | Recurso | Propiedad | Endpoint | Métodos extra |
 |---|---|---|---|
-| Facturas de venta | `client.invoices` | `invoices` | `void(id)`, `open(id)`, `send_email(id, emails, ...)`, `annul(id, cause)`, `get_pdf(id)`, `download_pdf(id, path)`, `get_xml(id)`, `download_xml(id, path)` |
+| Facturas de venta | `client.invoices` | `invoices` | `void(id)`, `open(id)`, `send_email(id, emails, ...)`, `annul(id, cause)`, `stamp(ids)`, `stamp_status(id)`, `wait_until_stamped(id, ...)`, `get_pdf(id)`, `download_pdf(id, path)`, `get_xml(id)`, `download_xml(id, path)` |
 | Notas crédito | `client.credit_notes` | `credit-notes` | CRUD estándar; la anulación usa `client.invoices.annul` |
 | Contactos (clientes y proveedores) | `client.contacts` | `contacts` | `find_by_identification(identification)` |
 | Pagos / ingresos | `client.payments` | `payments` | `void(id)`, `open(id)` |

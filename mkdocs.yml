@@ -58,6 +58,7 @@ nav:
       - Búsquedas exactas: guias/busquedas.md
       - Facturas sin duplicados: guias/facturas-sin-duplicados.md
       - Notas crédito y anulación: guias/notas-credito.md
+      - Emisión electrónica (DIAN): guias/emision-dian.md
       - Archivos de facturas: guias/archivos-de-facturas.md
       - Errores: guias/errores.md
       - Reintentos: guias/reintentos.md

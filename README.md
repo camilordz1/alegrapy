@@ -46,6 +46,7 @@ Probado en Python 3.10, 3.11, 3.12 y 3.13.
 | Fallas transitorias | Reintentos automáticos con backoff y `Retry-After`; un `POST` solo se reintenta si la petición seguro no salió | [Reintentos](https://camilordz1.github.io/alegrapy/guias/reintentos/) |
 | Recorrer todos los registros | `iter_all()` pagina sola, sin cargar todo en memoria | [Paginación](https://camilordz1.github.io/alegrapy/guias/paginacion/) |
 | Buscar por NIT o SKU | `contacts.find_by_identification()` e `items.find_by_reference()` con coincidencia exacta | [Búsquedas](https://camilordz1.github.io/alegrapy/guias/busquedas/) |
+| Emisión electrónica (DIAN) | `invoices.stamp()`, `stamp_status()` y `wait_until_stamped()` con estados tipados | [Emisión DIAN](https://camilordz1.github.io/alegrapy/guias/emision-dian/) |
 | Conexiones seguras | HTTPS obligatorio, IDs validados y logs sin cuerpos ni tokens | [Seguridad](https://camilordz1.github.io/alegrapy/guias/seguridad/) |
 
 ## Ejemplos
@@ -112,7 +113,7 @@ ofrece una cuarentena serializable; ver
 
 | Recurso | Propiedad | Operaciones extra |
 |---|---|---|
-| Facturas de venta | `client.invoices` | `void`, `open`, `send_email`, `annul`, `get_pdf`, `download_pdf`, `get_xml`, `download_xml` |
+| Facturas de venta | `client.invoices` | `void`, `open`, `send_email`, `annul`, `stamp`, `stamp_status`, `wait_until_stamped`, `get_pdf`, `download_pdf`, `get_xml`, `download_xml` |
 | Notas crédito | `client.credit_notes` | `annul` en `client.invoices` |
 | Contactos | `client.contacts` | `find_by_identification`, `add_attachment` |
 | Productos / ítems | `client.items` | `find_by_reference`, `add_attachment` |

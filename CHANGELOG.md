@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Electronic stamping (DIAN emission) API**: `invoices.stamp(ids)`, `invoices.stamp_status(id)`, and `invoices.wait_until_stamped(id, timeout=60.0, interval=2.0)`, along with typed `StampState`, `StampStatus`, `StampResult`, and `AlegraStampTimeoutError`.
+
 ## [0.1.0] - 2026-11-20
 
 Compared against the previous PyPI release (`0.0.4`).
