@@ -30,3 +30,5 @@ Las siguientes piezas de compatibilidad se mantienen en `0.1.x` y se eliminarán
 ## Historial de cambios
 
 Consulta el detalle de cada versión en [CHANGELOG.md](https://github.com/camilordz1/alegrapy/blob/master/CHANGELOG.md).
+
+Para mantenedores, el proceso de publicación está documentado en [RELEASING.md](https://github.com/camilordz1/alegrapy/blob/master/RELEASING.md).

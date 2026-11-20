@@ -1,0 +1,42 @@
+# Releasing AlegraPy
+
+Releases are published to PyPI via GitHub Actions using **Trusted Publishing** (OIDC, no long-lived API tokens) when a `vX.Y.Z` tag is pushed.
+
+## One-time setup
+
+Before the first release, configure these settings once in PyPI, TestPyPI, and GitHub:
+
+1. **PyPI Trusted Publisher** (on <https://pypi.org/manage/account/publishing/>):
+   - PyPI Project Name: `AlegraPy`
+   - Owner: `camilordz1`
+   - Repository name: `alegrapy`
+   - Workflow name: `release.yml`
+   - Environment name: `pypi`
+2. **TestPyPI Trusted Publisher** (on <https://test.pypi.org/manage/account/publishing/>):
+   - PyPI Project Name: `AlegraPy`
+   - Owner: `camilordz1`
+   - Repository name: `alegrapy`
+   - Workflow name: `release.yml`
+   - Environment name: `testpypi`
+3. **GitHub Environments** (Repository **Settings -> Environments**):
+   - Create `pypi` with **Required reviewers** set to the maintainer so every PyPI publish requires manual approval.
+   - Create `testpypi` (reviewer optional) for manual `workflow_dispatch` dry runs.
+
+## Per-release checklist
+
+1. Ensure `master` is clean and all CI checks are green.
+2. Update the version in `alegrapy/_version.py` (`__version__ = "X.Y.Z"`).
+3. Update `CHANGELOG.md`: move `## [Unreleased]` items into `## [X.Y.Z] - YYYY-MM-DD` (leaving an empty `## [Unreleased]` section above it).
+4. Commit the release preparation on `master` (e.g., `chore(release): prepare X.Y.Z`).
+5. Create and push the annotated or lightweight tag:
+   ```bash
+   git tag vX.Y.Z
+   git push origin master vX.Y.Z
+   ```
+6. Open the triggered **Release** workflow run in GitHub Actions and approve the `pypi` environment deployment.
+7. Wait for `publish-pypi` and `github-release` to finish, then verify installation in a fresh virtual environment:
+   ```bash
+   python -m venv /tmp/verify-alegrapy
+   /tmp/verify-alegrapy/bin/pip install "AlegraPy==X.Y.Z"
+   /tmp/verify-alegrapy/bin/python -c "import alegrapy; print(alegrapy.__version__)"
+   ```

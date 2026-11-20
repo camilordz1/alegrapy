@@ -18,6 +18,7 @@ prune alegrapy.egg-info
 exclude config.ini
 exclude alegra.log
 exclude main.py
+exclude RELEASING.md
 
 global-exclude *.py[cod]
 global-exclude __pycache__
