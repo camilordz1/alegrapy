@@ -115,7 +115,6 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
 
   github-release:
     needs: publish-pypi
@@ -139,6 +138,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          gh release create "$REF_NAME" dist/* \
-            --title "$REF_NAME" \
-            --notes-file release-notes.md
+          # Re-runnable: a partial earlier run may already have created the release
+          if gh release view "$REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$REF_NAME" --title "$REF_NAME" --notes-file release-notes.md
+            gh release upload "$REF_NAME" dist/* --clobber
+          else
+            gh release create "$REF_NAME" dist/* \
+              --title "$REF_NAME" \
+              --notes-file release-notes.md
+          fi

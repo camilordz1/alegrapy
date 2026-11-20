@@ -189,5 +189,48 @@ class TestReleaseChecks(unittest.TestCase):
             self.assertEqual(bad_rc, 1)
 
 
+    def test_cli_check_version_and_check_archives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            version_file = root / "_version.py"
+            version_file.write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+            self.assertEqual(release_checks.main(
+                ["check-version", "--tag", "v0.1.0", "--version-file", str(version_file)]), 0)
+            self.assertEqual(release_checks.main(
+                ["check-version", "--tag", "v0.1.1", "--version-file", str(version_file)]), 1)
+
+            clean = root / "clean.whl"
+            with zipfile.ZipFile(clean, "w") as zf:
+                zf.writestr("alegrapy/__init__.py", "")
+            dirty = root / "dirty.whl"
+            with zipfile.ZipFile(dirty, "w") as zf:
+                zf.writestr("alegrapy/config.ini", "secret")
+            self.assertEqual(release_checks.main(["check-archives", str(clean)]), 0)
+            self.assertEqual(release_checks.main(["check-archives", str(clean), str(dirty)]), 1)
+
+    def test_sdist_top_level_secret_outside_prefix_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "alegrapy-0.1.0").mkdir()
+            (root / "alegrapy-0.1.0" / "PKG-INFO").write_text("Name: AlegraPy")
+            (root / ".env").write_text("secret")
+            sdist = root / "odd.tar.gz"
+            with tarfile.open(sdist, "w:gz") as tf:
+                tf.add(root / "alegrapy-0.1.0", arcname="alegrapy-0.1.0")
+                tf.add(root / ".env", arcname=".env")
+            with self.assertRaises(ValueError):
+                release_checks.check_archives([sdist])
+
+    def test_root_entries_match_case_insensitively(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for entry in ("Tests/test_x.py", "releasing.md", "ODD/notes.md"):
+                with self.subTest(entry=entry):
+                    path = pathlib.Path(tmp) / f"w-{entry.replace('/', '_')}.whl"
+                    with zipfile.ZipFile(path, "w") as zf:
+                        zf.writestr(entry, "")
+                    with self.assertRaises(ValueError):
+                        release_checks.check_archives([path])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -97,17 +97,21 @@ def _check_members(
     strip_root: bool,
 ) -> None:
     forbidden: list[str] = []
+    root_files = {name.lower() for name in FORBIDDEN_ROOT_FILES}
+    root_dirs = {name.lower() for name in FORBIDDEN_ROOT_DIRS}
     for raw in members:
-        parts = pathlib.PurePosixPath(raw).parts
-        if strip_root:
-            if len(parts) <= 1:
-                continue
-            parts = parts[1:]
+        all_parts = pathlib.PurePosixPath(raw).parts
+        # Secrets are checked on the full path BEFORE stripping the sdist prefix directory,
+        # so a secret placed at the very top of the tarball cannot slip through
+        if any(_is_secret_name(part) for part in all_parts):
+            forbidden.append(raw)
+            continue
+        parts = all_parts[1:] if strip_root else all_parts
         if not parts:
             continue
-        root_entry = parts[0]
-        if (root_entry in FORBIDDEN_ROOT_FILES or root_entry in FORBIDDEN_ROOT_DIRS
-                or any(_is_secret_name(part) for part in parts)):
+        # Root entries also match case-insensitively (fail closed: Tests/, releasing.md)
+        root_entry = parts[0].lower()
+        if root_entry in root_files or root_entry in root_dirs:
             forbidden.append(raw)
     if forbidden:
         raise ValueError(f"Forbidden entries in {archive}: {forbidden}")
