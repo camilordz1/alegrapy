@@ -241,6 +241,31 @@ class TestInvoicesStamping(unittest.TestCase):
                 self.client.invoices.stamp([1])
         self.assertIn("stamp_status", str(ctx.exception))
 
+    def test_non_ascii_digit_codes_do_not_crash_after_send(self):
+        body = {"data": [{"id": "1", "code": "\u00b2", "message": "x"}]}
+        with patch.object(self.client.session, "request",
+                          return_value=self._response(400, body)):
+            results = self.client.invoices.stamp([1])
+        self.assertIsNone(results[0].code)
+        body_ok = {"data": [{"id": "1", "code": "3226", "message": "ya emitida"}]}
+        with patch.object(self.client.session, "request",
+                          return_value=self._response(400, body_ok)):
+            self.assertEqual(self.client.invoices.stamp([1])[0].code, 3226)
+
+    def test_wait_polls_and_truncates_the_last_sleep_to_the_deadline(self):
+        pending = {"id": "1", "status": "open", "stamp": {"legalStatus": "PENDING"}}
+        # monotonic: deadline base 0; after poll 1 -> 0 (sleep 2), poll 2 -> 2 (sleep 2),
+        # poll 3 -> 4 (remaining 1 -> sleep 1), poll 4 -> 5 (remaining 0 -> timeout)
+        clock = iter([0.0, 0.0, 2.0, 4.0, 5.0])
+        with patch.object(self.client, "query", return_value=pending) as query, \
+                patch.object(_INVOICES_TIME, "monotonic", side_effect=lambda: next(clock)), \
+                patch.object(_INVOICES_TIME, "sleep") as sleep:
+            with self.assertRaises(alegrapy.AlegraStampTimeoutError) as ctx:
+                self.client.invoices.wait_until_stamped(1, timeout=5, interval=2)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [2, 2, 1])
+        self.assertEqual(query.call_count, 4)
+        self.assertEqual(ctx.exception.last_status.state.value, "PENDING")
+
     def test_blank_observations_are_dropped(self):
         from alegrapy.stamping import stamp_status_from_invoice
         invoice = {"id": "1", "status": "open",

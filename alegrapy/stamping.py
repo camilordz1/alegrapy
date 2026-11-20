@@ -197,7 +197,9 @@ def _optional_int(value: Any) -> Optional[int]:
         return None
     if isinstance(value, int):
         return value
-    if isinstance(value, str) and value.isdigit():
+    # ASCII digits only: str.isdigit() also accepts characters such as "\u00b2" that int()
+    # rejects, which would raise after the stamp POST was already accepted
+    if isinstance(value, str) and value.isascii() and value.isdigit():
         return int(value)
     return None
 
