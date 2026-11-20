@@ -6,6 +6,7 @@ recursive-include alegrapy *.py py.typed
 recursive-include alegra *.py
 
 prune tests
+prune scripts
 prune docs
 prune odd
 prune env

@@ -19,7 +19,7 @@ Before the first release, configure these settings once in PyPI, TestPyPI, and G
    - Workflow name: `release.yml`
    - Environment name: `testpypi`
 3. **GitHub Environments** (Repository **Settings -> Environments**):
-   - Create `pypi` with **Required reviewers** set to the maintainer so every PyPI publish requires manual approval.
+   - Create `pypi` with **Required reviewers** set to the maintainer so every PyPI publish requires manual approval, and set **Deployment branches and tags -> Selected tags -> `v*`**.
    - Create `testpypi` (reviewer optional) for manual `workflow_dispatch` dry runs.
 
 ## Per-release checklist
@@ -28,12 +28,13 @@ Before the first release, configure these settings once in PyPI, TestPyPI, and G
 2. Update the version in `alegrapy/_version.py` (`__version__ = "X.Y.Z"`).
 3. Update `CHANGELOG.md`: move `## [Unreleased]` items into `## [X.Y.Z] - YYYY-MM-DD` (leaving an empty `## [Unreleased]` section above it).
 4. Commit the release preparation on `master` (e.g., `chore(release): prepare X.Y.Z`).
-5. Create and push the annotated or lightweight tag:
+5. Create and push an annotated tag:
    ```bash
-   git tag vX.Y.Z
+   git tag -a vX.Y.Z -m "AlegraPy X.Y.Z"
    git push origin master vX.Y.Z
    ```
 6. Open the triggered **Release** workflow run in GitHub Actions and approve the `pypi` environment deployment.
+   - If a PyPI upload fails partway through, check which distribution files already exist on PyPI before re-running the job (`skip-existing` is intentionally disabled on production PyPI).
 7. Wait for `publish-pypi` and `github-release` to finish, then verify installation in a fresh virtual environment:
    ```bash
    python -m venv /tmp/verify-alegrapy
