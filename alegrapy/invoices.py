@@ -827,12 +827,12 @@ class Invoices(Actions):
             AlegraAPIError: On ambiguous failures or non-per-ID 4xx/5xx responses.
         """
         normalized_ids = validate_stamp_ids(ids)
-        endpoint = f"{self.endpoint}/stamp"
+        endpoint = f"{self._collection_url()}/stamp"
         logger.info("Stamping %d invoice(s) via %s", len(normalized_ids), endpoint)
         try:
             payload = self.client.query('post', endpoint, data={"ids": normalized_ids})
         except AlegraValidationError as exc:
-            parsed = parse_stamp_error_400(exc.response_body)
+            parsed = parse_stamp_error_400(exc.response_body, normalized_ids)
             if parsed is not None:
                 return parsed
             raise

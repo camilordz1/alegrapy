@@ -9,6 +9,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from alegrapy.actions import validate_id
 
+from alegrapy.exceptions import AlegraAPIError
+
 _MAX_STAMP_IDS = 10
 
 
@@ -145,10 +147,9 @@ def _collect_observations(stamp: Dict[str, Any]) -> List[str]:
         raw = stamp.get(field)
         if isinstance(raw, list):
             for item in raw:
-                if isinstance(item, str) and item.strip():
-                    observations.append(item)
-                elif item is not None:
-                    observations.append(str(item))
+                text = item if isinstance(item, str) else (None if item is None else str(item))
+                if text is not None and text.strip():
+                    observations.append(text)
         elif isinstance(raw, str) and raw.strip():
             observations.append(raw)
     return observations
@@ -208,10 +209,14 @@ def parse_stamp_response(
     """Parse a 200 ``POST /invoices/stamp`` response into per-ID ``StampResult`` items."""
     entries: Any = payload.get("data") if isinstance(payload, dict) else payload
     if not isinstance(entries, list):
-        raise ValueError("Unexpected stamp response shape: expected 'data' list")
+        # The POST was accepted (HTTP 200), so this is NOT a local input error: the
+        # invoices may have been emitted. Callers must check stamp_status() before retrying.
+        raise AlegraAPIError(
+            "Unexpected stamp response shape (no 'data' list); the invoices may have been "
+            "emitted: check stamp_status() before stamping again"
+        )
 
-    by_id: Dict[str, StampResult] = {}
-    extra: List[StampResult] = []
+    parsed: List[StampResult] = []
     for entry in entries:
         if not isinstance(entry, dict) or entry.get("id") is None:
             continue
@@ -220,37 +225,43 @@ def parse_stamp_response(
         state = map_stamp_state(emission_raw)
         result = StampResult(
             invoice_id=inv_id,
-            success=bool(entry.get("success", False)),
+            # Only a real JSON true counts: "false", 1 or missing are never a success
+            success=entry.get("success") is True,
             message=str(entry.get("message") or ""),
             code=_optional_int(entry.get("code")),
             emission_status_raw=emission_raw if isinstance(emission_raw, str) else None,
             state=state,
         )
-        if inv_id in requested_ids and inv_id not in by_id:
-            by_id[inv_id] = result
+        parsed.append(result)
+
+    return _reconcile(parsed, requested_ids)
+
+
+def _reconcile(results: List[StampResult], requested_ids: Sequence[str]) -> List[StampResult]:
+    """Order results by the request and add a failed entry for every requested id the
+    server did not answer; results for unrequested ids are appended at the end."""
+    by_id: Dict[str, StampResult] = {}
+    extra: List[StampResult] = []
+    for result in results:
+        if result.invoice_id in requested_ids and result.invoice_id not in by_id:
+            by_id[result.invoice_id] = result
         else:
             extra.append(result)
-
-    results: List[StampResult] = []
+    ordered: List[StampResult] = []
     for req_id in requested_ids:
-        if req_id in by_id:
-            results.append(by_id[req_id])
-        else:
-            results.append(
-                StampResult(
-                    invoice_id=req_id,
-                    success=False,
-                    message="No result returned for this invoice",
-                    code=None,
-                    emission_status_raw=None,
-                    state=StampState.UNKNOWN,
-                )
-            )
-    results.extend(extra)
-    return results
+        ordered.append(by_id.get(req_id) or StampResult(
+            invoice_id=req_id,
+            success=False,
+            message="No result returned for this invoice",
+            code=None,
+            emission_status_raw=None,
+            state=StampState.UNKNOWN,
+        ))
+    return ordered + extra
 
 
-def parse_stamp_error_400(response_body: Optional[str]) -> Optional[List[StampResult]]:
+def parse_stamp_error_400(response_body: Optional[str],
+                          requested_ids: Sequence[str] = ()) -> Optional[List[StampResult]]:
     """Return per-ID ``StampResult`` items for a 400 with ``data: [{id, ...}]``, else ``None``."""
     if not response_body:
         return None
@@ -279,4 +290,6 @@ def parse_stamp_error_400(response_body: Optional[str]) -> Optional[List[StampRe
                 state=map_stamp_state(emission_raw),
             )
         )
-    return results
+    if not requested_ids:
+        return results
+    return _reconcile(results, requested_ids)

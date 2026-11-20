@@ -89,7 +89,7 @@ class TestInvoicesStamping(unittest.TestCase):
             results = self.client.invoices.stamp([11742])
 
         mock_query.assert_called_once_with(
-            "post", "invoices/stamp", data={"ids": ["11742"]}
+            "post", "https://api.alegra.com/api/v1/invoices/stamp", data={"ids": ["11742"]}
         )
         self.assertEqual(len(results), 1)
         res = results[0]
@@ -179,23 +179,74 @@ class TestInvoicesStamping(unittest.TestCase):
                         self.client.invoices.stamp(ids)
                 mock_query.assert_not_called()
 
+    @staticmethod
+    def _response(status, body):
+        from unittest.mock import MagicMock
+        resp = MagicMock(status_code=status, text=json.dumps(body), headers={})
+        resp.json.return_value = body
+        return resp
+
+    def test_stamp_posts_to_the_absolute_stamp_url_through_real_query(self):
+        body = {"data": [{"id": "11742", "success": True,
+                          "emissionStatus": "STAMPED_AND_ACCEPTED"}]}
+        with patch.object(self.client.session, "request",
+                          return_value=self._response(200, body)) as request:
+            results = self.client.invoices.stamp([11742])
+
+        self.assertEqual(request.call_args.kwargs["url"],
+                         "https://api.alegra.com/api/v1/invoices/stamp")
+        self.assertEqual(request.call_args.kwargs["method"].lower(), "post")
+        self.assertEqual(request.call_args.kwargs["json"], {"ids": ["11742"]})
+        self.assertTrue(results[0].success)
+
     def test_ambiguous_failures_raise_unchanged_and_never_repost(self):
-        for err in (
-            AlegraServerError("upstream error", status_code=503),
-            AlegraTimeoutError("read timed out"),
+        # Through the REAL query() and the default RetryPolicy: only session.request is mocked
+        client = AlegraClient(user="user", token="token")
+        for label, effect in (
+            ("read timeout", requests.exceptions.ReadTimeout("slow")),
+            ("503", self._response(503, {"message": "upstream"})),
         ):
-            with self.subTest(err=type(err).__name__):
-                with patch.object(
-                    self.client.session,
-                    "request",
-                    side_effect=requests.exceptions.ReadTimeout("slow")
-                    if isinstance(err, AlegraTimeoutError)
-                    else None,
-                ):
-                    with patch.object(self.client, "query", side_effect=err) as mock_query:
-                        with self.assertRaises(type(err)):
-                            self.client.invoices.stamp([11742])
-                    mock_query.assert_called_once()
+            with self.subTest(failure=label):
+                kwargs = ({"side_effect": effect} if isinstance(effect, Exception)
+                          else {"return_value": effect})
+                with patch.object(client.session, "request", **kwargs) as request:
+                    with self.assertRaises(alegrapy.AlegraAPIError):
+                        client.invoices.stamp([11742])
+                self.assertEqual(request.call_count, 1)
+
+    def test_400_results_follow_request_order_and_fill_missing_ids(self):
+        body = {"data": [{"id": "3", "code": 3226, "message": "ya emitida"},
+                         {"id": "1", "code": 4013, "message": "no existe"}]}
+        with patch.object(self.client.session, "request",
+                          return_value=self._response(400, body)):
+            results = self.client.invoices.stamp([1, 2, 3])
+
+        self.assertEqual([r.invoice_id for r in results], ["1", "2", "3"])
+        self.assertEqual([r.code for r in results], [4013, None, 3226])
+        self.assertFalse(any(r.success for r in results))
+        self.assertEqual(results[1].message, "No result returned for this invoice")
+
+    def test_success_requires_a_real_true(self):
+        for value in ("false", "true", 1, None):
+            with self.subTest(value=value):
+                body = {"data": [{"id": "1", "success": value}]}
+                with patch.object(self.client.session, "request",
+                                  return_value=self._response(200, body)):
+                    self.assertFalse(self.client.invoices.stamp([1])[0].success)
+
+    def test_unexpected_200_shape_is_an_api_error_after_send(self):
+        with patch.object(self.client.session, "request",
+                          return_value=self._response(200, {"unexpected": True})):
+            with self.assertRaises(alegrapy.AlegraAPIError) as ctx:
+                self.client.invoices.stamp([1])
+        self.assertIn("stamp_status", str(ctx.exception))
+
+    def test_blank_observations_are_dropped(self):
+        from alegrapy.stamping import stamp_status_from_invoice
+        invoice = {"id": "1", "status": "open",
+                   "stamp": {"legalStatus": "STAMPED_AND_ACCEPTED",
+                             "warnings": ["  ", "", "Regla: FAZ09", None], "errors": "   "}}
+        self.assertEqual(stamp_status_from_invoice(invoice).observations, ["Regla: FAZ09"])
 
     def test_stamp_status_live_get_shape(self):
         invoice = {
