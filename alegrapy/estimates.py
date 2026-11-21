@@ -1,5 +1,4 @@
 from typing import Any, Dict, List, Optional, Union
-from alegrapy._deprecation import warn_legacy
 from alegrapy.actions import Actions
 
 
@@ -44,9 +43,9 @@ class Estimates(Actions):
     def void(self, id: Union[int, str]) -> Any:
         """Void / Annul an estimate by ID.
 
-        .. deprecated:: 0.3.0
-            ``POST /estimates/{id}/void`` is not documented by Alegra; this method
-            will be removed in 1.0.
+        .. note::
+            This endpoint is not documented by Alegra; its existence was verified on
+            2026-11-21. It may change without notice.
 
         Args:
             id (int or str): Estimate ID.
@@ -57,20 +56,15 @@ class Estimates(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        warn_legacy(
-            "estimates.void",
-            "Estimates.void() calls POST /estimates/{id}/void, which is not documented "
-            "by Alegra and will be removed in 1.0.",
-        )
         endpoint = self._resource_url(id, "void")
         return self.client.query('post', endpoint)
 
     def open(self, id: Union[int, str]) -> Any:
         """Open / Reopen an estimate by ID.
 
-        .. deprecated:: 0.3.0
-            ``POST /estimates/{id}/open`` is not documented by Alegra; this method
-            will be removed in 1.0.
+        .. note::
+            This endpoint is not documented by Alegra; its existence was verified on
+            2026-11-21. It may change without notice.
 
         Args:
             id (int or str): Estimate ID.
@@ -81,11 +75,6 @@ class Estimates(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        warn_legacy(
-            "estimates.open",
-            "Estimates.open() calls POST /estimates/{id}/open, which is not documented "
-            "by Alegra and will be removed in 1.0.",
-        )
         endpoint = self._resource_url(id, "open")
         return self.client.query('post', endpoint)
 

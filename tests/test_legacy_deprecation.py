@@ -348,7 +348,7 @@ class TestWarnOnceRegistry(unittest.TestCase):
         self.assertTrue(req.call_args.kwargs["url"].startswith("https://sandbox.example.com/api/v1/contacts"))
 
 
-class TestUndocumentedEndpointDeprecations(unittest.TestCase):
+class TestUndocumentedEndpointsNotDeprecated(unittest.TestCase):
 
     def setUp(self):
         from alegrapy._deprecation import reset_legacy_warnings
@@ -357,7 +357,7 @@ class TestUndocumentedEndpointDeprecations(unittest.TestCase):
         self.addCleanup(reset_legacy_warnings)
         self.client = AlegraClient(user="u", token="t", retry=RetryPolicy(max_retries=0))
 
-    def test_undocumented_methods_warn_once_and_preserve_requests(self):
+    def test_undocumented_methods_emit_no_warning_and_preserve_requests(self):
         cases = [
             (
                 "estimates.void",
@@ -415,13 +415,7 @@ class TestUndocumentedEndpointDeprecations(unittest.TestCase):
                         self.assertIsNone(req_call.kwargs.get("json"))
 
                 future = [w for w in caught if issubclass(w.category, FutureWarning)]
-                self.assertEqual(len(future), 1)
-                self.assertEqual(future[0].filename, __file__)
-                msg = str(future[0].message)
-                self.assertIn("not documented by Alegra", msg)
-                self.assertIn("1.0", msg)
-                if label == "purchase_orders.add_comment":
-                    self.assertIn("bills", msg)
+                self.assertEqual(future, [])
 
     def test_invalid_ids_still_raise_value_error_without_request(self):
         calls = [
@@ -431,12 +425,10 @@ class TestUndocumentedEndpointDeprecations(unittest.TestCase):
             lambda: self.client.purchase_orders.add_comment("../bad", "nota"),
         ]
         for call_fn in calls:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                with patch.object(self.client.session, "request") as mock_req:
-                    with self.assertRaises(ValueError):
-                        call_fn()
-                    mock_req.assert_not_called()
+            with patch.object(self.client.session, "request") as mock_req:
+                with self.assertRaises(ValueError):
+                    call_fn()
+                mock_req.assert_not_called()
 
     def test_documented_sibling_methods_emit_zero_warnings(self):
         with warnings.catch_warnings():
