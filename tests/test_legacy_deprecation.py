@@ -179,8 +179,6 @@ class TestLegacyDeprecationWarnings(unittest.TestCase):
         self.assertIs(alegra.items, items)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestLegacyWarningLocation(unittest.TestCase):
@@ -258,3 +256,7 @@ class TestLegacyWarningLocation(unittest.TestCase):
             with patch.object(client.session, "request", return_value=_mock_response([])):
                 contacts().list()
                 session.query("get", "https://api.alegra.com/api/v1/contacts")
+
+
+if __name__ == "__main__":
+    unittest.main()
