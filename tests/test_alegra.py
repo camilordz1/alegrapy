@@ -9,7 +9,7 @@ import warnings
 import requests
 
 import alegrapy
-from alegrapy import session, contacts, invoices, payments, items, AlegraClient, AlegraAPIError
+from alegrapy import session, contacts, invoices, payments, items, AlegraClient, AlegraAPIError, RetryPolicy
 
 class _IntLike:
     """Minimal stand-in for integral types such as numpy.int64."""
@@ -95,7 +95,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_request.return_value = mock_response
 
         # Instantiating client (modern style)
-        client = AlegraClient(user="client_user", token="client_token")
+        client = AlegraClient(user="client_user", token="client_token", retry=RetryPolicy(max_retries=0))
         res = client.invoices.list(0, 10, fields='id')
 
         self.assertEqual(res, [{"id": 1}, {"id": 2}])
@@ -122,7 +122,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"id": 456, "name": "New Item"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         payload = {"name": "New Item", "price": 10.5}
         res = client.items.create(payload)
 
@@ -144,7 +144,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"id": 456, "name": "Updated Item"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         payload = {"name": "Updated Item"}
         res = client.items.update(456, payload)
 
@@ -166,7 +166,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"status": "deleted"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         res = client.payments.delete(999)
 
         self.assertEqual(res, {"status": "deleted"})
@@ -186,7 +186,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"message": "Unauthorized access"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="bad_user", token="bad_token")
+        client = AlegraClient(user="bad_user", token="bad_token", retry=RetryPolicy(max_retries=0))
         
         with self.assertRaises(AlegraAPIError) as ctx:
             client.contacts.read(1)
@@ -202,7 +202,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = []
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         client.contacts.list()
 
         args, kwargs = mock_request.call_args
@@ -217,7 +217,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"status": "void"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         
         # Test void
         res_void = client.estimates.void(123)
@@ -246,7 +246,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"status": "success"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         client.purchase_orders.add_comment(456, "PO Comment")
 
         args, kwargs = mock_request.call_args
@@ -286,7 +286,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"email": "me@example.com"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         res = client.users.self_info()
 
         self.assertEqual(res, {"email": "me@example.com"})
@@ -308,7 +308,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_default_timeout_is_passed(self, mock_request):
         mock_request.return_value = self._ok_response()
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         client.contacts.read(1)
 
         args, kwargs = mock_request.call_args
@@ -318,7 +318,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_custom_client_timeout_is_passed(self, mock_request):
         mock_request.return_value = self._ok_response()
 
-        client = AlegraClient(user="user", token="token", timeout=5)
+        client = AlegraClient(user="user", token="token", timeout=5, retry=RetryPolicy(max_retries=0))
         client.contacts.read(1)
 
         args, kwargs = mock_request.call_args
@@ -342,7 +342,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_timeout_raises_alegra_api_error(self, mock_request):
         mock_request.side_effect = requests.exceptions.Timeout("timed out")
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         with self.assertRaises(AlegraAPIError) as ctx:
             client.contacts.read(1)
@@ -351,7 +351,7 @@ class TestAlegraPy(unittest.TestCase):
 
     @patch('requests.Session.request')
     def test_read_rejects_path_traversal_id(self, mock_request):
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         with self.assertRaises(ValueError):
             client.contacts.read("1/../../users/self")
@@ -360,7 +360,7 @@ class TestAlegraPy(unittest.TestCase):
 
     @patch('requests.Session.request')
     def test_sub_actions_reject_traversal_id(self, mock_request):
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         with self.assertRaises(ValueError):
             client.invoices.void("1/../../users/self")
@@ -377,7 +377,7 @@ class TestAlegraPy(unittest.TestCase):
 
     @patch('requests.Session.request')
     def test_update_delete_attachment_reject_invalid_id(self, mock_request):
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         with self.assertRaises(ValueError):
             client.items.update("1/x", {"name": "n"})
@@ -390,7 +390,7 @@ class TestAlegraPy(unittest.TestCase):
 
     @patch('requests.Session.request')
     def test_invalid_id_values_are_rejected(self, mock_request):
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         bad_ids = [
             "1?x=y", "1#frag", "1%2F", "1.5", "a b", "..", "", " ",
             True, False, -1, 1.5, None, [1], "1\n",
@@ -405,7 +405,7 @@ class TestAlegraPy(unittest.TestCase):
     @patch('requests.Session.request')
     def test_valid_ids_are_accepted(self, mock_request):
         mock_request.return_value = self._ok_response()
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         client.contacts.read(0)
         client.contacts.read(123)
@@ -420,7 +420,7 @@ class TestAlegraPy(unittest.TestCase):
     @patch('requests.Session.request')
     def test_int_like_ids_are_accepted(self, mock_request):
         mock_request.return_value = self._ok_response()
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         client.contacts.read(_IntLike(42))
         client.invoices.void(_IntLike(7))
@@ -434,7 +434,7 @@ class TestAlegraPy(unittest.TestCase):
 
     @patch('requests.Session.request')
     def test_negative_int_like_id_is_rejected(self, mock_request):
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         with self.assertRaises(ValueError):
             client.contacts.read(_IntLike(-1))
@@ -454,13 +454,13 @@ class TestAlegraPy(unittest.TestCase):
         for bad in bad_urls:
             with self.subTest(url=bad):
                 with self.assertRaises(ValueError):
-                    AlegraClient(user="user", token="token", url=bad)
+                    AlegraClient(user="user", token="token", url=bad, retry=RetryPolicy(max_retries=0))
 
         mock_request.assert_not_called()
 
     @patch('requests.Session.request')
     def test_url_setter_rejects_insecure_or_malformed_urls(self, mock_request):
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
 
         for bad in ["http://evil.example.com/", "ftp://x.example.com/", "https:///nohost"]:
             with self.subTest(url=bad):
@@ -474,7 +474,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_custom_https_url_is_accepted_and_used(self, mock_request):
         mock_request.return_value = self._ok_response()
 
-        client = AlegraClient(user="user", token="token", url="https://custom.example.com/api/v1/")
+        client = AlegraClient(user="user", token="token", url="https://custom.example.com/api/v1/", retry=RetryPolicy(max_retries=0))
         client.contacts.read(1)
 
         args, kwargs = mock_request.call_args
@@ -485,7 +485,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_loopback_http_urls_are_accepted(self, mock_request):
         for good in ["http://localhost:8000/api/v1/", "http://127.0.0.1/", "http://[::1]:8000/"]:
             with self.subTest(url=good):
-                client = AlegraClient(user="user", token="token", url=good)
+                client = AlegraClient(user="user", token="token", url=good, retry=RetryPolicy(max_retries=0))
                 self.assertEqual(client.url, good)
                 client.url = good
 
@@ -508,11 +508,13 @@ class TestAlegraPy(unittest.TestCase):
     @patch('requests.Session.request')
     def test_client_with_only_user_does_not_use_global_token(self, mock_request):
         mock_request.return_value = self._ok_response()
-        session.user = "global_user"
-        session.token = "global_token"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = "global_user"
+            session.token = "global_token"
 
-        client = AlegraClient(user="own_user")
-        client.contacts.read(1)
+            client = AlegraClient(user="own_user", retry=RetryPolicy(max_retries=0))
+            client.contacts.read(1)
 
         headers = mock_request.call_args.kwargs['headers']
         self.assertNotIn('Authorization', headers)
@@ -521,11 +523,13 @@ class TestAlegraPy(unittest.TestCase):
     @patch('requests.Session.request')
     def test_client_with_only_token_does_not_use_global_user(self, mock_request):
         mock_request.return_value = self._ok_response()
-        session.user = "global_user"
-        session.token = "global_token"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = "global_user"
+            session.token = "global_token"
 
-        client = AlegraClient(token="own_token")
-        client.contacts.read(1)
+            client = AlegraClient(token="own_token", retry=RetryPolicy(max_retries=0))
+            client.contacts.read(1)
 
         self.assertNotIn('Authorization', mock_request.call_args.kwargs['headers'])
 
@@ -549,7 +553,7 @@ class TestAlegraPy(unittest.TestCase):
         session.user = "global_user"
         session.token = "global_token"
 
-        client = AlegraClient(user="own_user", token="own_token")
+        client = AlegraClient(user="own_user", token="own_token", retry=RetryPolicy(max_retries=0))
         client.contacts.read(1)
 
         headers = mock_request.call_args.kwargs['headers']
@@ -559,7 +563,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_query_does_not_store_authorization_on_shared_session(self, mock_request):
         mock_request.return_value = self._ok_response()
 
-        client = AlegraClient(user="own_user", token="own_token")
+        client = AlegraClient(user="own_user", token="own_token", retry=RetryPolicy(max_retries=0))
         client.contacts.read(1)
 
         self.assertNotIn('Authorization', client.session.headers)
@@ -579,8 +583,8 @@ class TestAlegraPy(unittest.TestCase):
     def test_two_clients_send_their_own_headers(self, mock_request):
         mock_request.return_value = self._ok_response()
 
-        first = AlegraClient(user="user_a", token="token_a")
-        second = AlegraClient(user="user_b", token="token_b")
+        first = AlegraClient(user="user_a", token="token_a", retry=RetryPolicy(max_retries=0))
+        second = AlegraClient(user="user_b", token="token_b", retry=RetryPolicy(max_retries=0))
         first.contacts.read(1)
         second.contacts.read(1)
         first.contacts.read(2)
@@ -596,7 +600,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_multipart_request_drops_content_type_per_request(self, mock_request):
         mock_request.return_value = self._ok_response()
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         client.query("post", "https://api.alegra.com/api/v1/contacts/1/attachment",
                      files={"file": ("a.txt", b"x")})
 
@@ -611,7 +615,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"message": "SECRET-BODY-123"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         with self.assertLogs("alegra", level="INFO") as logs:
             with self.assertRaises(AlegraAPIError) as ctx:
                 client.contacts.read(1)
@@ -631,7 +635,7 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.side_effect = ValueError("no json")
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         with self.assertLogs("alegra", level="INFO") as logs:
             with self.assertRaises(AlegraAPIError):
                 client.contacts.read(1)
@@ -646,7 +650,7 @@ class TestAlegraPy(unittest.TestCase):
         )
         mock_request.side_effect = original
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         with self.assertLogs("alegra", level="INFO") as logs:
             with self.assertRaises(AlegraAPIError) as ctx:
                 client.contacts.list(email="pii@example.com")
@@ -661,7 +665,7 @@ class TestAlegraPy(unittest.TestCase):
     def test_success_log_has_no_query_string(self, mock_request):
         mock_request.return_value = self._ok_response()
 
-        client = AlegraClient(user="user", token="token")
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         with self.assertLogs("alegra", level="INFO") as logs:
             client.query("get", "https://api.alegra.com/api/v1/contacts?email=pii@example.com",
                          params={"query": "pii@example.com"})
@@ -676,14 +680,14 @@ class TestAlegraPy(unittest.TestCase):
         for bad in ["https://user:pw@api.alegra.com/api/v1/", "https://user@api.alegra.com/api/v1/"]:
             with self.subTest(url=bad):
                 with self.assertRaises(ValueError) as ctx:
-                    AlegraClient(user="user", token="token", url=bad)
+                    AlegraClient(user="user", token="token", url=bad, retry=RetryPolicy(max_retries=0))
                 self.assertNotIn("pw", str(ctx.exception))
                 self.assertNotIn(bad, str(ctx.exception))
 
     def test_base_url_errors_do_not_echo_the_url(self):
         bad = "http://evil.example.com/secret-path"
         with self.assertRaises(ValueError) as ctx:
-            AlegraClient(user="user", token="token", url=bad)
+            AlegraClient(user="user", token="token", url=bad, retry=RetryPolicy(max_retries=0))
 
         message = str(ctx.exception)
         self.assertNotIn(bad, message)
@@ -693,7 +697,7 @@ class TestAlegraPy(unittest.TestCase):
 
     def test_constructor_validates_through_url_setter(self):
         with patch.object(AlegraClient, "url", new_callable=unittest.mock.PropertyMock) as prop:
-            AlegraClient(user="user", token="token", url="https://custom.example.com/")
+            AlegraClient(user="user", token="token", url="https://custom.example.com/", retry=RetryPolicy(max_retries=0))
         prop.assert_called_with("https://custom.example.com/")
 
     @patch('os.path.exists')
@@ -789,14 +793,14 @@ class TestTypedExceptions(unittest.TestCase):
 
     def _error_for_response(self, response):
         with patch('requests.Session.request', return_value=response):
-            client = AlegraClient(user="user", token="token")
+            client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
             with self.assertRaises(AlegraAPIError) as ctx:
                 client.contacts.read(1)
         return ctx.exception
 
     def _error_for_transport(self, original):
         with patch('requests.Session.request', side_effect=original):
-            client = AlegraClient(user="user", token="token")
+            client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
             with self.assertRaises(AlegraAPIError) as ctx:
                 client.contacts.list()
         return ctx.exception
@@ -953,7 +957,7 @@ class TestTypedExceptions(unittest.TestCase):
     def test_non_request_exception_propagates_unwrapped(self):
         original = TypeError("Object of type Decimal is not JSON serializable")
         with patch('requests.Session.request', side_effect=original):
-            client = AlegraClient(user="user", token="token")
+            client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
             with self.assertNoLogs("alegra", level="ERROR"):
                 with self.assertRaises(TypeError) as ctx:
                     client.contacts.list()
@@ -965,7 +969,7 @@ class TestTypedExceptions(unittest.TestCase):
         response.text = ""
 
         with patch('requests.Session.request', return_value=response):
-            client = AlegraClient(user="user", token="token")
+            client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
             self.assertEqual(client.contacts.read(1), {})
 
     def test_empty_or_whitespace_body_returns_empty_dict(self):
@@ -975,7 +979,7 @@ class TestTypedExceptions(unittest.TestCase):
                 response.text = body
 
                 with patch('requests.Session.request', return_value=response):
-                    client = AlegraClient(user="user", token="token")
+                    client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
                     self.assertEqual(client.contacts.read(1), {})
 
     def test_non_json_success_body_returns_response_text(self):
@@ -984,7 +988,7 @@ class TestTypedExceptions(unittest.TestCase):
         response.json.side_effect = ValueError("no json")
 
         with patch('requests.Session.request', return_value=response):
-            client = AlegraClient(user="user", token="token")
+            client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
             self.assertEqual(client.contacts.read(1), {"response_text": "plain text answer"})
 
     def test_error_with_non_dict_json_uses_generic_message(self):
