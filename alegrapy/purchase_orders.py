@@ -1,5 +1,4 @@
 from typing import Any, Dict, List, Optional, Union
-from alegrapy._deprecation import warn_legacy
 from alegrapy.actions import Actions
 
 
@@ -19,9 +18,9 @@ class PurchaseOrders(Actions):
                    subject: Optional[str] = None, message: Optional[str] = None) -> Any:
         """Send purchase order by email.
 
-        .. deprecated:: 0.3.0
-            ``POST /purchase-orders/{id}/email`` is not documented by Alegra; this method
-            will be removed in 1.0.
+        .. note::
+            This endpoint is not documented by Alegra; its existence was verified on
+            2026-11-21. It may change without notice.
 
         Args:
             id (int or str): Purchase order ID.
@@ -36,11 +35,6 @@ class PurchaseOrders(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        warn_legacy(
-            "purchase_orders.send_email",
-            "PurchaseOrders.send_email() calls POST /purchase-orders/{id}/email, which is "
-            "not documented by Alegra and will be removed in 1.0.",
-        )
         endpoint = self._resource_url(id, "email")
         data: Dict[str, Any] = {
             "emails": emails if isinstance(emails, list) else [emails],
@@ -68,9 +62,11 @@ class PurchaseOrders(Actions):
     def add_comment(self, id: Union[int, str], comment_text: str) -> Any:
         """Add comments to a purchase order.
 
-        .. deprecated:: 0.3.0
-            ``POST /purchase-orders/{id}/comments`` is not documented by Alegra
-            (comments are documented only on bills); this method will be removed in 1.0.
+        .. note::
+            This endpoint is not documented by Alegra; its existence was verified on
+            2026-11-21. It may change without notice.
+            Alegra was observed answering a missing purchase order with HTTP 200 and
+            an error body (``{"code": 37009, ...}``), so check the response.
 
         Args:
             id (int or str): Purchase order ID.
@@ -82,12 +78,6 @@ class PurchaseOrders(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
-        warn_legacy(
-            "purchase_orders.add_comment",
-            "PurchaseOrders.add_comment() calls POST /purchase-orders/{id}/comments, which is "
-            "not documented by Alegra (comments are documented only on bills) and will be "
-            "removed in 1.0.",
-        )
         endpoint = self._resource_url(id, "comments")
         data = {"comments": comment_text}
         return self.client.query('post', endpoint, data=data)
