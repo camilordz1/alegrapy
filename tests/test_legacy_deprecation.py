@@ -258,5 +258,69 @@ class TestLegacyWarningLocation(unittest.TestCase):
                 session.query("get", "https://api.alegra.com/api/v1/contacts")
 
 
+class TestWarnOnceRegistry(unittest.TestCase):
+    """A warning only counts as delivered once warnings.warn returned normally."""
+
+    def setUp(self):
+        from alegrapy._deprecation import reset_legacy_warnings
+
+        self.saved = {name: getattr(session, name) for name in ("user", "url")}
+        self.session_module = importlib.import_module("alegrapy.session")
+        reset_legacy_warnings()
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        from alegrapy._deprecation import reset_legacy_warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            for name, value in self.saved.items():
+                setattr(session, name, value)
+        reset_legacy_warnings()
+
+    def test_error_filter_raises_on_every_attempt(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            for _ in range(2):
+                with self.assertRaises(FutureWarning):
+                    session.user = "u"
+
+    def test_warning_raised_as_error_is_emitted_again_later(self):
+        from alegrapy._deprecation import warn_legacy
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            with self.assertRaises(FutureWarning):
+                warn_legacy("test.feature", "test message")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            warn_legacy("test.feature", "test message")
+            warn_legacy("test.feature", "test message")
+        self.assertEqual(len(caught), 1)
+
+    def _url_warnings(self, url):
+        client = AlegraClient(user="u", token="t", retry=RetryPolicy(max_retries=0))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.url = url
+        from alegrapy._deprecation import reset_legacy_warnings
+        reset_legacy_warnings()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with patch.object(client.session, "request", return_value=_mock_response([])) as req:
+                client.contacts.list()
+        return [str(w.message) for w in caught if "session.url" in str(w.message)], req
+
+    def test_default_url_without_trailing_slash_does_not_warn(self):
+        msgs, req = self._url_warnings("https://api.alegra.com/api/v1")
+        self.assertEqual(msgs, [])
+        self.assertTrue(req.call_args.kwargs["url"].startswith("https://api.alegra.com/api/v1/contacts"))
+
+    def test_non_default_global_url_warns(self):
+        msgs, req = self._url_warnings("https://sandbox.example.com/api/v1/")
+        self.assertEqual(len(msgs), 1)
+        self.assertTrue(req.call_args.kwargs["url"].startswith("https://sandbox.example.com/api/v1/contacts"))
+
+
 if __name__ == "__main__":
     unittest.main()

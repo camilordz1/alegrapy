@@ -31,13 +31,19 @@ def warn_legacy(feature: str, message: str) -> None:
     """Emit a ``FutureWarning`` at most once per ``feature`` per process.
 
     The warning is attributed to the first stack frame outside ``alegrapy``, so it points
-    at the application line that used the legacy API.
+    at the application line that used the legacy API. A feature only counts as warned once
+    ``warnings.warn`` returns: when a filter turns the warning into an exception, the next
+    use raises again. A warning dropped by an ``ignore`` filter still counts as delivered,
+    because ``warnings`` gives no way to tell it apart. Two threads racing on the first use
+    may both warn; that is preferable to holding the lock while user filters and
+    ``showwarning`` hooks run.
     """
     with _LOCK:
         if feature in _WARNED:
             return
-        _WARNED.add(feature)
     warnings.warn(message, FutureWarning, stacklevel=_caller_stacklevel())
+    with _LOCK:
+        _WARNED.add(feature)
 
 
 def reset_legacy_warnings() -> None:
