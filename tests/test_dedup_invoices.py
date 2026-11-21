@@ -548,6 +548,44 @@ class TestInvoiceDedupDateFilter(unittest.TestCase):
                 self.client.invoices.create_once(self._params(date="21/11/2026"), "order-1")
             mock_req.assert_not_called()
 
+    def test_create_once_serializes_date_object_without_mutating_caller_params(self):
+        import datetime as dt
+
+        date_obj = dt.date(2026, 11, 21)
+        params = self._params(date=date_obj)
+        created = {"id": 88, "observations": MARKER, "date": "2026-11-21"}
+        responses = [
+            self._mock_response([]),  # precheck filtered
+            self._mock_response([]),  # precheck unfiltered
+            self._mock_response(created),  # POST
+        ]
+        with patch.object(self.client.session, "request", side_effect=responses) as mock_req:
+            result = self.client.invoices.create_once(params, "order-1")
+
+        self.assertEqual(result, created)
+        self.assertIs(params["date"], date_obj)
+        gets = [c for c in mock_req.call_args_list if c.kwargs["method"].lower() == "get"]
+        self.assertEqual(gets[0].kwargs["params"]["date"], "2026-11-21")
+        posts = [c for c in mock_req.call_args_list if c.kwargs["method"].lower() == "post"]
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0].kwargs["json"]["date"], "2026-11-21")
+        # Verify real JSON serialization would succeed
+        json.dumps(posts[0].kwargs["json"])
+
+    def test_create_once_preserves_string_date_unchanged(self):
+        params = self._params(date="2026-11-21")
+        created = {"id": 89, "observations": MARKER, "date": "2026-11-21"}
+        responses = [
+            self._mock_response([]),
+            self._mock_response([]),
+            self._mock_response(created),
+        ]
+        with patch.object(self.client.session, "request", side_effect=responses) as mock_req:
+            self.client.invoices.create_once(params, "order-1")
+
+        posts = [c for c in mock_req.call_args_list if c.kwargs["method"].lower() == "post"]
+        self.assertEqual(posts[0].kwargs["json"]["date"], "2026-11-21")
+
     def test_latency_script_refuses_without_confirmation_flag(self):
         import pathlib
 
