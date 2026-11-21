@@ -115,3 +115,16 @@ El aviso señala la línea de tu código que usa la API legacy, así que úsalo 
 
 - Un cliente que define su propio `user` o `token` ignora por completo las credenciales de `session` (ver [Autenticación](autenticacion.md#resolucion-de-credenciales-por-par)).
 - Las validaciones de [Seguridad](seguridad.md) (HTTPS, IDs, timeout) aplican igual en el modo legacy.
+
+## Métodos sobre endpoints no documentados
+
+A partir de `0.3.0`, cuatro métodos emiten un `FutureWarning` (una vez por método y proceso) y se eliminarán en `1.0`, porque llaman rutas que no figuran en la documentación oficial de Alegra (`developer.alegra.com`):
+
+| Método | Ruta | Motivo | Qué hacer en su lugar |
+|---|---|---|---|
+| `estimates.void(id)` | `POST /estimates/{id}/void` | Endpoint no documentado. | No existe un endpoint equivalente en la API actual. |
+| `estimates.open(id)` | `POST /estimates/{id}/open` | Endpoint no documentado. | No existe un endpoint equivalente en la API actual. |
+| `purchase_orders.send_email(id, ...)` | `POST /purchase-orders/{id}/email` | Endpoint no documentado. | No existe un endpoint equivalente en la API actual. |
+| `purchase_orders.add_comment(id, text)` | `POST /purchase-orders/{id}/comments` | Endpoint no documentado (los comentarios están documentados solo en facturas de proveedor). | No existe un endpoint equivalente para órdenes de compra en la API actual. |
+
+Los métodos hermanos que sí están documentados (`estimates.send_email` y `purchase_orders.void`) permanecen sin cambios ni avisos.
