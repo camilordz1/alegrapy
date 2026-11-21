@@ -318,8 +318,6 @@ class TestPaymentsCreateOnce(unittest.TestCase):
             {"id": 2, "type": "in", "client": {"id": 999}, "observations": MARKER},
             # Wrong type
             {"id": 3, "type": "out", "client": {"id": 126}, "observations": MARKER},
-            # Missing type
-            {"id": 4, "client": {"id": 126}, "observations": MARKER},
             # Exact match
             {"id": 5, "type": "in", "client": {"id": 126}, "observations": MARKER},
         ]
@@ -327,7 +325,22 @@ class TestPaymentsCreateOnce(unittest.TestCase):
 
         found = self.client.payments.reconcile("pay-1", client_id=126, type="in")
 
-        self.assertIs(found, records[4])
+        self.assertIs(found, records[3])
+
+    def test_reconcile_matches_record_without_type_field(self):
+        # The server was asked to filter by type; a list record that omits ``type`` must
+        # still match, otherwise an existing payment is missed and "retry" posts again
+        record = {"id": 4, "client": {"id": 126}, "observations": MARKER}
+        self._wire(posts=[], lookups=[[record]])
+
+        self.assertIs(self.client.payments.reconcile("pay-1", client_id=126, type="in"), record)
+
+    def test_reconcile_compares_client_ids_across_str_and_int(self):
+        for requested, stored in (("126", 126), (126, "126"), ("126", {"id": 126})):
+            with self.subTest(requested=requested, stored=stored):
+                record = {"id": 6, "type": "in", "client": stored, "observations": MARKER}
+                self._wire(posts=[], lookups=[[record]])
+                self.assertIs(self.client.payments.reconcile("pay-1", client_id=requested), record)
 
     def test_reconcile_skips_null_client_when_client_id_requested(self):
         records = [{"id": 1, "type": "in", "client": None, "observations": MARKER}]

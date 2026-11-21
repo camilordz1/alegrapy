@@ -10,7 +10,7 @@ import time
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 from urllib.parse import urljoin, urlsplit
 
 import requests
@@ -286,9 +286,8 @@ class Invoices(Actions):
     @staticmethod
     def _client_id_from(params: Dict[str, Any]) -> Union[int, str]:
         """Read and validate the client id required for the dedup lookup."""
-        client_id = client_id_from(params, required=True)
-        assert client_id is not None
-        return client_id
+        # required=True raises instead of returning None
+        return cast(Union[int, str], client_id_from(params, required=True))
 
     def annul(self, id: Union[int, str], cause: str, *, dedup_key: Optional[str] = None,
               operation_type: Any = None, number_template_id: Any = None,

@@ -260,7 +260,11 @@ pago = client.payments.reconcile(
     lookup_pages=5,
 )
 
-if pago is not None:
+if pago is not None and pago.get("status") == "voided":
+    # El pago existió y luego se anuló: decide en tu aplicación si se registra de nuevo
+    # (con una dedup_key nueva) o si se cierra la entrada
+    enviar_a_revision_manual(entrada, pago)
+elif pago is not None:
     marcar_como_registrado(pago)
 else:
     datos_pago = construir_datos_de_pago(entrada["dedup_key"])
@@ -279,4 +283,5 @@ Particularidades de pagos frente a facturas:
 - **Sin filtro de estado**: `reconcile` también devuelve pagos anulados (`status="voided"`) que
   lleven la marca; revisa `pago["status"]` según la lógica de tu aplicación.
 - **Re-validación local**: cuando indicas `client_id` o `type`, el SDK los envía como filtros a
-  Alegra y además vuelve a comprobarlos localmente (descartando registros con `client: null`).
+  Alegra y además vuelve a comprobarlos localmente (descartando registros con `client: null` o
+  con otro `type`; un registro que no trae `type` sí se acepta, para no perder un pago ya creado).

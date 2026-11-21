@@ -38,7 +38,8 @@ class Payments(Actions):
         voided payments carrying the marker are also considered; callers should
         check ``status``). ``client_id`` and ``type`` are sent as server filters
         when given and re-checked client-side: when ``client_id`` is given, a
-        record whose ``client`` is ``null`` or a different id does not match.
+        record whose ``client`` is ``null`` or a different id does not match; a
+        record with a different ``type`` does not match, one without ``type`` does.
 
         Args:
             dedup_key (str): Key used when the payment was created with ``create_once``.
@@ -73,9 +74,10 @@ class Payments(Actions):
                 continue
             if expected_client is not None and record_client_id(payment) != expected_client:
                 continue
-            if valid_type is not None and (
-                not isinstance(payment, dict) or payment.get("type") != valid_type
-            ):
+            # A record that omits ``type`` still matches: the server already filtered by
+            # it, and skipping it would miss an existing payment and let "retry" re-post
+            record_type = payment.get("type") if isinstance(payment, dict) else None
+            if valid_type is not None and record_type is not None and record_type != valid_type:
                 continue
             return payment
         return None
