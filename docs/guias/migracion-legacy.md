@@ -80,8 +80,14 @@ Si actualizas código antiguo desde la versión `0.0.4`, ten en cuenta estos cam
 ```python
 import warnings
 
-warnings.filterwarnings("ignore", category=FutureWarning, module="alegrapy")
+warnings.filterwarnings(
+    "ignore",
+    message=r".*The global (session|default client) will be removed",
+    category=FutureWarning,
+)
 ```
+
+El aviso señala la línea de tu código que usa la API legacy, así que úsalo para encontrar qué migrar. El filtro va por mensaje (no por `module=`), porque el aviso se atribuye a tu módulo y no a `alegrapy`.
 
 ## Ejemplo antes y después
 

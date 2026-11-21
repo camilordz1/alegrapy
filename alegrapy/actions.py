@@ -60,7 +60,6 @@ class Actions:
             f"{type(self).__name__}() without an explicit AlegraClient uses the deprecated "
             "global default client; pass client=AlegraClient(...) or use client.<resource>. "
             "The global session will be removed in 1.0.",
-            stacklevel=2,
         )
         return _default_client
 

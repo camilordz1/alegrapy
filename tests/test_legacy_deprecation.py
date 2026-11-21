@@ -181,3 +181,80 @@ class TestLegacyDeprecationWarnings(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLegacyWarningLocation(unittest.TestCase):
+    """Each legacy warning must point at the caller's line, not at alegrapy internals."""
+
+    def setUp(self):
+        from alegrapy._deprecation import reset_legacy_warnings
+
+        self.session_module = importlib.import_module("alegrapy.session")
+        self.saved = {name: getattr(session, name)
+                      for name in ("user", "token", "url", "timeout", "retry")}
+        reset_legacy_warnings()
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        from alegrapy._deprecation import reset_legacy_warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            for name, value in self.saved.items():
+                setattr(session, name, value)
+        reset_legacy_warnings()
+
+    def _assert_points_here(self, action):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            action()
+        future = [w for w in caught if issubclass(w.category, FutureWarning)]
+        self.assertTrue(future, "expected a FutureWarning")
+        for w in future:
+            self.assertEqual(w.filename, __file__, str(w.message))
+
+    def test_setattr_points_at_caller(self):
+        self._assert_points_here(lambda: setattr(session, "user", "u"))
+
+    def test_create_auth_points_at_caller(self):
+        self._assert_points_here(session.create_auth)
+
+    def test_default_client_access_points_at_caller(self):
+        def access():
+            from alegrapy.session import default_client  # noqa: F401
+        self._assert_points_here(access)
+
+    def test_resource_and_client_fallbacks_point_at_caller(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = "u"
+            session.token = "t"
+        from alegrapy._deprecation import reset_legacy_warnings
+        reset_legacy_warnings()
+        client = self.session_module._default_client
+        with patch.object(client.session, "request", return_value=_mock_response([])):
+            self._assert_points_here(lambda: contacts().list())
+
+    def test_session_query_points_at_caller(self):
+        client = self.session_module._default_client
+        with patch.object(client.session, "request", return_value=_mock_response([])):
+            self._assert_points_here(
+                lambda: session.query("get", "https://api.alegra.com/api/v1/contacts"))
+
+    def test_documented_filter_silences_every_legacy_warning(self):
+        client = self.session_module._default_client
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*The global (session|default client) will be removed",
+                category=FutureWarning,
+            )
+            session.user = "u"
+            session.token = "t"
+            session.timeout = 10
+            session.create_auth()
+            from alegrapy.session import default_client  # noqa: F401
+            with patch.object(client.session, "request", return_value=_mock_response([])):
+                contacts().list()
+                session.query("get", "https://api.alegra.com/api/v1/contacts")

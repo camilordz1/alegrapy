@@ -339,7 +339,6 @@ class AlegraClient:
                 "AlegraClient is falling back to the deprecated global "
                 "session.user/session.token; pass user= and token= to AlegraClient(...). "
                 "The global session will be removed in 1.0.",
-                stacklevel=3,
             )
         if (self._url is None
                 and _normalize_base_url(session.url or DEFAULT_BASE_URL) != DEFAULT_BASE_URL):
@@ -347,21 +346,18 @@ class AlegraClient:
                 "client.fallback.url",
                 "AlegraClient is falling back to the deprecated global session.url; "
                 "pass url= to AlegraClient(...). The global session will be removed in 1.0.",
-                stacklevel=3,
             )
         if self._timeout is None and session.timeout != DEFAULT_TIMEOUT:
             warn_legacy(
                 "client.fallback.timeout",
                 "AlegraClient is falling back to the deprecated global session.timeout; "
                 "pass timeout= to AlegraClient(...). The global session will be removed in 1.0.",
-                stacklevel=3,
             )
         if self._retry is None and session.retry is not None:
             warn_legacy(
                 "client.fallback.retry",
                 "AlegraClient is falling back to the deprecated global session.retry; "
                 "pass retry= to AlegraClient(...). The global session will be removed in 1.0.",
-                stacklevel=3,
             )
 
     def query(self, method: str, url: str, data: Optional[Dict[str, Any]] = None,
@@ -539,7 +535,6 @@ class _LegacySessionMeta(type):
             f"session.{name}",
             f"session.{name} is deprecated; pass configuration to AlegraClient(...) "
             "instead. The global session will be removed in 1.0.",
-            stacklevel=2,
         )
         super().__setattr__(name, value)
 
@@ -561,7 +556,6 @@ class session(metaclass=_LegacySessionMeta):
             "session.create_auth",
             "session.create_auth() is deprecated and is now a no-op; pass user= and "
             "token= to AlegraClient(...). The global session will be removed in 1.0.",
-            stacklevel=2,
         )
 
     @classmethod
@@ -575,7 +569,6 @@ class session(metaclass=_LegacySessionMeta):
             "session.query",
             "session.query() is deprecated; use AlegraClient(...).query() or resource "
             "methods on AlegraClient. The global session will be removed in 1.0.",
-            stacklevel=2,
         )
         return _default_client.query(method, url, data=data, params=params, files=files)
 
@@ -590,7 +583,6 @@ def __getattr__(name: str) -> Any:
             "session.default_client",
             "alegrapy.session.default_client is deprecated; instantiate AlegraClient(...) "
             "instead. The global default client will be removed in 1.0.",
-            stacklevel=2,
         )
         return _default_client
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
