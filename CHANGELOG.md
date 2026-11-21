@@ -9,9 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **While on `0.y.z`**: a `MINOR` bump (`0.1` -> `0.2`) **may** include breaking changes (always listed under **Breaking changes**); a `PATCH` bump (`0.1.0` -> `0.1.1`) contains fixes only.
 - **From `1.0.0` onward**: breaking changes appear only in `MAJOR` releases; deprecations are announced at least one `MINOR` release before removal with a warning.
 - **Planned for `1.0.0`**: remove the `alegra` compatibility shim and the legacy global `session`, and rename the `"alegra"` logger.
-- **Pinning recommendation**: pin `AlegraPy>=0.2,<0.3` until `1.0.0`.
+- **Pinning recommendation**: pin `AlegraPy>=0.3,<0.4` until `1.0.0`.
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-11-21
+
+Compared against `0.2.0`.
+
+### Breaking changes
+
+- **Methods on undocumented endpoints emit `FutureWarning`**: `Estimates.void`, `Estimates.open`, `PurchaseOrders.send_email` and `PurchaseOrders.add_comment` now warn once per process. Test suites that run with `-W error` (or `filterwarnings = error`) will fail until they stop calling them or filter the warnings (see the legacy migration guide).
+- **`Invoices.create_once` validates `params["date"]`**: a present value that is not a `datetime.date` or a strict `YYYY-MM-DD` string now raises `ValueError` before any request is sent. Alegra already rejected such values; only the error type and timing change.
 
 ### Added
 
