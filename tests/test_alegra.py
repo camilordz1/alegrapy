@@ -264,7 +264,8 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"status": "success"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        from alegrapy import RetryPolicy
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         client.bank_accounts.transfer(1, 2, 100.50, "2026-06-21", "Test description")
 
         args, kwargs = mock_request.call_args
