@@ -348,5 +348,123 @@ class TestWarnOnceRegistry(unittest.TestCase):
         self.assertTrue(req.call_args.kwargs["url"].startswith("https://sandbox.example.com/api/v1/contacts"))
 
 
+class TestUndocumentedEndpointDeprecations(unittest.TestCase):
+
+    def setUp(self):
+        from alegrapy._deprecation import reset_legacy_warnings
+
+        reset_legacy_warnings()
+        self.addCleanup(reset_legacy_warnings)
+        self.client = AlegraClient(user="u", token="t", retry=RetryPolicy(max_retries=0))
+
+    def test_undocumented_methods_warn_once_and_preserve_requests(self):
+        cases = [
+            (
+                "estimates.void",
+                lambda: self.client.estimates.void(5),
+                "post",
+                "https://api.alegra.com/api/v1/estimates/5/void",
+                None,
+            ),
+            (
+                "estimates.open",
+                lambda: self.client.estimates.open(5),
+                "post",
+                "https://api.alegra.com/api/v1/estimates/5/open",
+                None,
+            ),
+            (
+                "purchase_orders.send_email",
+                lambda: self.client.purchase_orders.send_email(
+                    7, ["a@example.com"], send_copy_to_user=True, subject="S", message="M"
+                ),
+                "post",
+                "https://api.alegra.com/api/v1/purchase-orders/7/email",
+                {
+                    "emails": ["a@example.com"],
+                    "sendCopyToUser": True,
+                    "emailTemplate": {"subject": "S", "message": "M"},
+                },
+            ),
+            (
+                "purchase_orders.add_comment",
+                lambda: self.client.purchase_orders.add_comment(7, "nota"),
+                "post",
+                "https://api.alegra.com/api/v1/purchase-orders/7/comments",
+                {"comments": "nota"},
+            ),
+        ]
+        for label, call_fn, expected_method, expected_url, expected_body in cases:
+            with self.subTest(method=label):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    with patch.object(
+                        self.client.session, "request", return_value=_mock_response({"ok": True})
+                    ) as mock_req:
+                        res1 = call_fn()
+                        res2 = call_fn()
+                self.assertEqual(res1, {"ok": True})
+                self.assertEqual(res2, {"ok": True})
+                self.assertEqual(mock_req.call_count, 2)
+                for req_call in mock_req.call_args_list:
+                    self.assertEqual(req_call.kwargs["method"].lower(), expected_method)
+                    self.assertEqual(req_call.kwargs["url"], expected_url)
+                    if expected_body is not None:
+                        self.assertEqual(req_call.kwargs["json"], expected_body)
+                    else:
+                        self.assertIsNone(req_call.kwargs.get("json"))
+
+                future = [w for w in caught if issubclass(w.category, FutureWarning)]
+                self.assertEqual(len(future), 1)
+                self.assertEqual(future[0].filename, __file__)
+                msg = str(future[0].message)
+                self.assertIn("not documented by Alegra", msg)
+                self.assertIn("1.0", msg)
+                if label == "purchase_orders.add_comment":
+                    self.assertIn("bills", msg)
+
+    def test_invalid_ids_still_raise_value_error_without_request(self):
+        calls = [
+            lambda: self.client.estimates.void("../bad"),
+            lambda: self.client.estimates.open("../bad"),
+            lambda: self.client.purchase_orders.send_email("../bad", "a@example.com"),
+            lambda: self.client.purchase_orders.add_comment("../bad", "nota"),
+        ]
+        for call_fn in calls:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                with patch.object(self.client.session, "request") as mock_req:
+                    with self.assertRaises(ValueError):
+                        call_fn()
+                    mock_req.assert_not_called()
+
+    def test_documented_sibling_methods_emit_zero_warnings(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            with patch.object(
+                self.client.session, "request", return_value=_mock_response({"ok": True})
+            ) as mock_req:
+                self.client.estimates.send_email(5, "a@example.com")
+                self.client.purchase_orders.void(7)
+        self.assertEqual(mock_req.call_count, 2)
+
+    def test_probe_script_refuses_without_confirmation_flag(self):
+        import pathlib
+
+        script_path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "probe_undocumented_routes.py"
+        spec = importlib.util.spec_from_file_location("probe_undocumented_routes", script_path)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with patch("requests.request") as mock_req, patch("requests.Session.request") as mock_sess:
+            with self.assertRaises(SystemExit) as ctx:
+                module.main([])
+            self.assertNotEqual(ctx.exception.code, 0)
+            mock_req.assert_not_called()
+            mock_sess.assert_not_called()
+
+
+
 if __name__ == "__main__":
     unittest.main()
