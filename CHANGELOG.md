@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Duplicate-safe payment creation**: `payments.create_once()` and `payments.reconcile()` reusing the `observations` dedup-marker flow (with optional `client` and `type` filtering).
 - **Electronic stamping (DIAN emission) API**: `invoices.stamp(ids)`, `invoices.stamp_status(id)`, and `invoices.wait_until_stamped(id, timeout=60.0, interval=2.0)`, along with typed `StampState`, `StampStatus`, `StampResult`, and `AlegraStampTimeoutError`.
 
 ### Deprecated

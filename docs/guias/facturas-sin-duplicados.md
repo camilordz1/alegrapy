@@ -205,3 +205,78 @@ consumir un número DIAN.
 - No está verificado si Alegra envía `observations` al XML de la DIAN.
 - Cuánto tarda una factura creada y perdida por timeout en aparecer en el listado no está
   documentado.
+
+## Pagos sin duplicados
+
+Registrar un pago (`client.payments`) dos veces es igual de riesgoso que duplicar una factura:
+duplica el ingreso o el egreso de caja. `client.payments.create_once` y `client.payments.reconcile`
+usan el mismo flujo y la misma marca en `observations` (campo que Alegra **no imprime** en el
+comprobante):
+
+```python
+from alegrapy import AlegraClient, make_dedup_key_from
+
+client = AlegraClient(user="tu_usuario@dominio.com", token="tu_token_api")
+
+datos_pago = {
+    "date": "2026-11-20",
+    "bankAccount": {"id": 1},
+    "paymentMethod": "transfer",
+    "type": "in",
+    "client": {"id": 126},
+    "invoices": [{"id": 11742, "amount": 150000}],
+}
+
+key = make_dedup_key_from(
+    datos_pago,
+    ["type", "client.id", "invoices[].id", "invoices[].amount", "date"],
+)
+pago = client.payments.create_once(datos_pago, dedup_key=key)
+```
+
+### Cuarentena y reconciliación de pagos
+
+El patrón de cuarentena es el mismo que en facturas, usando `on_unverified="raise"` y
+`client.payments.reconcile`:
+
+```python
+import json
+from alegrapy import AlegraUnverifiedCreateError
+
+try:
+    pago = client.payments.create_once(datos_pago, dedup_key=key, on_unverified="raise")
+except AlegraUnverifiedCreateError as err:
+    guardar_en_cuarentena(json.dumps(err.to_dict()))
+```
+
+Y en el worker de reconciliación:
+
+```python
+entrada = leer_entrada_de_cuarentena()
+pago = client.payments.reconcile(
+    entrada["dedup_key"],
+    entrada["client_id"],
+    type=entrada["payload"].get("type"),
+    lookup_pages=5,
+)
+
+if pago is not None:
+    marcar_como_registrado(pago)
+else:
+    datos_pago = construir_datos_de_pago(entrada["dedup_key"])
+    pago = client.payments.create_once(
+        datos_pago, entrada["dedup_key"], precheck=True, lookup_pages=10
+    )
+    marcar_como_registrado(pago)
+```
+
+Particularidades de pagos frente a facturas:
+
+- **`client` es opcional** (por ejemplo, pagos a categorías contables). Si no pasas `client` en el
+  payload ni `client_id` en `reconcile`, la búsqueda revisa solo los `lookup_pages * 30` pagos más
+  recientes de toda la empresa (filtrados por `type` si está presente). En cuentas con mucho
+  movimiento, pasa `client` o aumenta `lookup_pages`.
+- **Sin filtro de estado**: `reconcile` también devuelve pagos anulados (`status="voided"`) que
+  lleven la marca; revisa `pago["status"]` según la lógica de tu aplicación.
+- **Re-validación local**: cuando indicas `client_id` o `type`, el SDK los envía como filtros a
+  Alegra y además vuelve a comprobarlos localmente (descartando registros con `client: null`).

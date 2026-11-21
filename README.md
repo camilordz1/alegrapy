@@ -105,8 +105,9 @@ except AlegraAPIError as err:
         ...  # márcala como "pendiente de verificar"; no la crees otra vez a ciegas
 ```
 
-Para facturas, `client.invoices.create_once(datos, dedup_key=...)` automatiza esa verificación y
-ofrece una cuarentena serializable; ver
+Para facturas y pagos, `client.invoices.create_once(datos, dedup_key=...)` y
+`client.payments.create_once(datos, dedup_key=...)` automatizan esa verificación y ofrecen una
+cuarentena serializable; ver
 [Facturas sin duplicados](docs/guias/facturas-sin-duplicados.md).
 
 ## Recursos disponibles
@@ -117,7 +118,7 @@ ofrece una cuarentena serializable; ver
 | Notas crédito | `client.credit_notes` | `annul` en `client.invoices` |
 | Contactos | `client.contacts` | `find_by_identification`, `add_attachment` |
 | Productos / ítems | `client.items` | `find_by_reference`, `add_attachment` |
-| Pagos | `client.payments` | `void`, `open` |
+| Pagos | `client.payments` | `create_once`, `reconcile`, `void`, `open` |
 | Cotizaciones | `client.estimates` | `void`, `open`, `send_email` |
 | Órdenes de compra | `client.purchase_orders` | `send_email`, `add_comment` |
 | Cuentas bancarias | `client.bank_accounts` | `transfer` |
