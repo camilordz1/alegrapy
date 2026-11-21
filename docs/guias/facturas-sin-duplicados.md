@@ -188,20 +188,30 @@ selecciones distintas sobre el mismo payload nunca producen la misma clave.
 ## `reconcile`
 
 ```python
-client.invoices.reconcile(dedup_key, client_id, lookup_pages=2)
+client.invoices.reconcile(dedup_key, client_id, lookup_pages=2, date="2026-11-21")
 ```
 
-Devuelve la factura cuya línea `observations` coincide exactamente con la marca, o `None`. Busca
-en las facturas más recientes del cliente (`order_field=id`, `order_direction=DESC`), sin filtro
-de estado: los borradores y las facturas abiertas también cuentan, porque un borrador ya puede
-consumir un número DIAN.
+Devuelve la factura cuya línea `observations` coincide exactamente con la marca, o `None`. Si indicas `date` (o si `params["date"]` está presente en `create_once`), el SDK consulta primero las facturas de ese día usando el filtro `date` del servidor (hasta `lookup_pages * 30` registros) y, si no la encuentra, recurre al barrido sin filtro de fecha sobre las más recientes del cliente (`order_field=id`, `order_direction=DESC`). Así se evita perder la factura en clientes con mucho volumen diario sin debilitar el comportamiento anterior. Los borradores y las facturas abiertas también cuentan, porque un borrador ya puede consumir un número DIAN.
+
+## Medir la latencia del listado (`verify_window`)
+
+Alegra no documenta cuánto tarda una factura recién creada en aparecer en `GET /invoices`. Para elegir un `verify_window` acorde con tu cuenta, el repositorio incluye la herramienta de mantenimiento `scripts/measure_list_latency.py`:
+
+```bash
+ALEGRA_USER=... ALEGRA_TOKEN=... python scripts/measure_list_latency.py \
+  --yes-call-live-api --client-id <ID_CLIENTE> --item-id <ID_ITEM> --delete
+```
+
+!!! warning "Crea un documento real"
+    Este script crea una factura real en estado `draft` en tu cuenta de Alegra para medir el tiempo hasta que aparece en `reconcile`. Usa `--delete` para eliminarla al terminar (o bórrala manualmente usando el `id` impreso).
 
 ## Limitaciones (importantes)
 
 - `"retry"` reduce los duplicados, no los elimina.
 - Dos procesos pueden usar la misma clave a la vez y ambos fallar la búsqueda previa. Serializa
   por clave (por ejemplo, una restricción única en la base de datos o un lock por pedido).
-- La búsqueda solo cubre las `lookup_pages * 30` facturas más recientes de ese cliente.
+- Sin `date`, la búsqueda solo cubre las `lookup_pages * 30` facturas más recientes de ese
+  cliente; con `date`, cubre hasta `lookup_pages * 30` facturas de ese día más la ventana reciente.
 - No está verificado si Alegra envía `observations` al XML de la DIAN.
 - Cuánto tarda una factura creada y perdida por timeout en aparecer en el listado no está
   documentado.
