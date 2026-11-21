@@ -13,6 +13,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `Invoices.reconcile(..., *, date=None)` optional keyword-only `date` parameter (`datetime.date` or strict `YYYY-MM-DD` string) to narrow the first lookup pass via the server `date` filter.
+- Maintainer script `scripts/measure_list_latency.py` (not shipped in wheel/sdist) to measure `GET /invoices` listing latency.
+
+### Changed
+
+- Invoice dedup lookup (`Invoices.create_once`) now validates `params["date"]` when present and passes it to `Invoices.reconcile`, scanning that day's invoices first before falling back to the newest unfiltered window. Invalid `params["date"]` values now raise `ValueError` before any request is sent.
+
 ### Deprecated
 
 - **Methods on undocumented Alegra endpoints** (emit a once-per-process `FutureWarning`, planned for removal in `1.0.0`):
