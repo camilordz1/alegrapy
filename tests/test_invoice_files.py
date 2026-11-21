@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -346,15 +347,17 @@ class TestInvoiceFiles(unittest.TestCase):
         self.assertNotIn("Expires", output)
 
     def test_download_xml_and_legacy_reachability(self):
-        default_client = sys.modules['alegrapy.session'].default_client
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "FE.xml"
-            with patch.object(default_client, 'query', return_value={"xml": XML_URL}) as query:
-                with patch('requests.get', return_value=_response(XML_BYTES, url=XML_URL)) as mock_get:
-                    result = legacy_invoices().download_xml(42, target)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            default_client = sys.modules['alegrapy.session'].default_client
+            with tempfile.TemporaryDirectory() as directory:
+                target = Path(directory) / "FE.xml"
+                with patch.object(default_client, 'query', return_value={"xml": XML_URL}) as query:
+                    with patch('requests.get', return_value=_response(XML_BYTES, url=XML_URL)) as mock_get:
+                        result = legacy_invoices().download_xml(42, target)
 
-            self.assertEqual(result, target)
-            self.assertEqual(target.read_bytes(), XML_BYTES)
+                self.assertEqual(result, target)
+                self.assertEqual(target.read_bytes(), XML_BYTES)
 
         mock_get.assert_called_once()
         query.assert_called_once()

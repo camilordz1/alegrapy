@@ -5,10 +5,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlsplit, urlunsplit
 import requests
 
+from alegrapy._deprecation import warn_legacy
 from alegrapy.exceptions import (AlegraAPIError, AlegraNotFoundError, _error_for_exception,
                                _error_for_status)
 from alegrapy.retry import (RetryPolicy, _may_have_been_processed, _retry_delay, _should_retry,
                           _sleep)
+
+DEFAULT_BASE_URL = "https://api.alegra.com/api/v1/"
+DEFAULT_TIMEOUT = 30
 
 # Create a dedicated logger for the library, allowing applications to configure it
 # The logger keeps the pre-rename name "alegra" on purpose, so existing logging
@@ -99,7 +103,7 @@ class AlegraClient:
             user (str, optional): Alegra username (email).
             token (str, optional): Alegra API token.
             url (str, optional): Custom base API URL. Must use https (http only for loopback hosts).
-                Defaults to 'https://api.alegra.com/api/v1/'.
+                Defaults to ``DEFAULT_BASE_URL`` (``'https://api.alegra.com/api/v1/'``).
             timeout (float, optional): Request timeout in seconds. Defaults to the global session timeout (30).
             retry (RetryPolicy, optional): Retry policy. Defaults to the global session policy
                 (``RetryPolicy()`` when unset).
@@ -259,7 +263,7 @@ class AlegraClient:
         if self._url is not None:
             return self._url
         # The legacy class attribute bypasses the setter; normalize it here too
-        return _normalize_base_url(session.url or "https://api.alegra.com/api/v1/")
+        return _normalize_base_url(session.url or DEFAULT_BASE_URL)
 
     @url.setter
     def url(self, value: Optional[str]) -> None:
@@ -326,6 +330,40 @@ class AlegraClient:
             path = path[len(base_path):]
         return path
 
+    def _warn_global_fallbacks(self) -> None:
+        """Emit one-time warnings when a request actually falls back to ``session``."""
+        if (self._user is None and self._token is None
+                and (session.user is not None or session.token is not None)):
+            warn_legacy(
+                "client.fallback.credentials",
+                "AlegraClient is falling back to the deprecated global "
+                "session.user/session.token; pass user= and token= to AlegraClient(...). "
+                "The global session will be removed in 1.0.",
+                stacklevel=3,
+            )
+        if (self._url is None
+                and _normalize_base_url(session.url or DEFAULT_BASE_URL) != DEFAULT_BASE_URL):
+            warn_legacy(
+                "client.fallback.url",
+                "AlegraClient is falling back to the deprecated global session.url; "
+                "pass url= to AlegraClient(...). The global session will be removed in 1.0.",
+                stacklevel=3,
+            )
+        if self._timeout is None and session.timeout != DEFAULT_TIMEOUT:
+            warn_legacy(
+                "client.fallback.timeout",
+                "AlegraClient is falling back to the deprecated global session.timeout; "
+                "pass timeout= to AlegraClient(...). The global session will be removed in 1.0.",
+                stacklevel=3,
+            )
+        if self._retry is None and session.retry is not None:
+            warn_legacy(
+                "client.fallback.retry",
+                "AlegraClient is falling back to the deprecated global session.retry; "
+                "pass retry= to AlegraClient(...). The global session will be removed in 1.0.",
+                stacklevel=3,
+            )
+
     def query(self, method: str, url: str, data: Optional[Dict[str, Any]] = None,
               params: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Any]] = None) -> Any:
         """Perform an HTTP request to the Alegra API and handle errors.
@@ -356,6 +394,7 @@ class AlegraClient:
         """
         # Also covers the legacy global session.url, which is a plain class attribute
         _validate_base_url(self.url)
+        self._warn_global_fallbacks()
 
         headers = self._request_headers(files)
         policy = self.retry
@@ -492,35 +531,68 @@ class AlegraClient:
         self.close()
 
 
-class session:
+class _LegacySessionMeta(type):
+    """Metaclass that emits a one-time FutureWarning on ``session.<attr> = ...``."""
+
+    def __setattr__(cls, name: str, value: Any) -> None:
+        warn_legacy(
+            f"session.{name}",
+            f"session.{name} is deprecated; pass configuration to AlegraClient(...) "
+            "instead. The global session will be removed in 1.0.",
+            stacklevel=2,
+        )
+        super().__setattr__(name, value)
+
+
+class session(metaclass=_LegacySessionMeta):
     """Legacy compatibility class representing global session configurations."""
     user: Optional[str] = None
     token: Optional[str] = None
-    url: str = "https://api.alegra.com/api/v1/"
-    timeout: float = 30
+    url: str = DEFAULT_BASE_URL
+    timeout: float = DEFAULT_TIMEOUT
     retry: Optional[RetryPolicy] = None
     headers: Dict[str, str] = {'Accept': 'application/json', 'Content-type': 'application/json'}
 
     @classmethod
     def create_auth(cls) -> None:
-        """Compatibility method to populate headers dictionary"""
-        if cls.user and cls.token:
-            api_key = base64.b64encode(f"{cls.user}:{cls.token}".encode()).decode()
-            cls.headers['Authorization'] = f"Basic {api_key}"
+        """Deprecated no-op retained for compatibility; never stores credentials."""
+        cls.headers.pop('Authorization', None)
+        warn_legacy(
+            "session.create_auth",
+            "session.create_auth() is deprecated and is now a no-op; pass user= and "
+            "token= to AlegraClient(...). The global session will be removed in 1.0.",
+            stacklevel=2,
+        )
 
     @classmethod
     def query(cls, method: str, url: str, data: Optional[Dict[str, Any]] = None,
               params: Optional[Dict[str, Any]] = None, files: Optional[Dict[str, Any]] = None) -> Any:
         """Perform a query using the legacy global credentials.
 
-        Delegates to the global default_client.
+        Delegates to the global default client.
         """
-        cls.create_auth()
-        # Delegate to global default client
-        return default_client.query(method, url, data=data, params=params, files=files)
+        warn_legacy(
+            "session.query",
+            "session.query() is deprecated; use AlegraClient(...).query() or resource "
+            "methods on AlegraClient. The global session will be removed in 1.0.",
+            stacklevel=2,
+        )
+        return _default_client.query(method, url, data=data, params=params, files=files)
 
 
-# Instantiate the default global client for legacy import compatibility
-default_client = AlegraClient()
+# Internal default global client for legacy import compatibility
+_default_client = AlegraClient()
+
+
+def __getattr__(name: str) -> Any:
+    if name == "default_client":
+        warn_legacy(
+            "session.default_client",
+            "alegrapy.session.default_client is deprecated; instantiate AlegraClient(...) "
+            "instead. The global default client will be removed in 1.0.",
+            stacklevel=2,
+        )
+        return _default_client
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

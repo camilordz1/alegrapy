@@ -4,6 +4,7 @@ import base64
 import json
 import numbers
 import sys
+import warnings
 
 import requests
 
@@ -36,16 +37,18 @@ class TestAlegraPy(unittest.TestCase):
 
     def setUp(self):
         # Reset legacy session configurations
-        session.user = None
-        session.token = None
-        session.url = "https://api.alegra.com/api/v1/"
-        session.timeout = 30
-        from alegrapy import RetryPolicy
-        session.retry = RetryPolicy(max_retries=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = None
+            session.token = None
+            session.url = "https://api.alegra.com/api/v1/"
+            session.timeout = 30
+            from alegrapy import RetryPolicy
+            session.retry = RetryPolicy(max_retries=0)
 
         # The legacy class shadows the module on the package, so reach the module itself
         # to reset the global default client's credentials.
-        default_client = sys.modules['alegrapy.session'].default_client
+        default_client = sys.modules['alegrapy.session']._default_client
         default_client._user = None
         default_client._token = None
         default_client._retry = None
@@ -323,11 +326,13 @@ class TestAlegraPy(unittest.TestCase):
     @patch('requests.Session.request')
     def test_legacy_session_timeout_is_honored(self, mock_request):
         mock_request.return_value = self._ok_response()
-        session.timeout = 12
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.timeout = 12
 
-        session.user = "test_user@example.com"
-        session.token = "test_token_123"
-        contacts().read(1)
+            session.user = "test_user@example.com"
+            session.token = "test_token_123"
+            contacts().read(1)
 
         args, kwargs = mock_request.call_args
         self.assertEqual(kwargs['timeout'], 12)
@@ -526,11 +531,13 @@ class TestAlegraPy(unittest.TestCase):
     @patch('requests.Session.request')
     def test_client_without_credentials_uses_global_pair(self, mock_request):
         mock_request.return_value = self._ok_response()
-        session.user = "global_user"
-        session.token = "global_token"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = "global_user"
+            session.token = "global_token"
 
-        client = AlegraClient()
-        client.contacts.read(1)
+            client = AlegraClient()
+            client.contacts.read(1)
 
         headers = mock_request.call_args.kwargs['headers']
         self.assertEqual(headers['Authorization'], self._basic("global_user", "global_token"))
@@ -701,7 +708,8 @@ class TestAlegraPy(unittest.TestCase):
         mock_response.json.return_value = {"status": "uploaded"}
         mock_request.return_value = mock_response
 
-        client = AlegraClient(user="user", token="token")
+        from alegrapy import RetryPolicy
+        client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         res = client.contacts.add_attachment(99, "dummy.txt")
 
         self.assertEqual(res, {"status": "uploaded"})
@@ -735,30 +743,34 @@ class TestAlegraPy(unittest.TestCase):
     @patch('requests.Session.request')
     def test_legacy_base_url_without_trailing_slash_builds_correct_urls(self, mock_request):
         mock_request.return_value = self._ok_response()
-        session.user = "legacy_user@example.com"
-        session.token = "legacy_token"
-        session.url = "https://api.alegra.com/api/v1"
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = "legacy_user@example.com"
+            session.token = "legacy_token"
+            session.url = "https://api.alegra.com/api/v1"
 
-        contacts().list()
-        _, kwargs = mock_request.call_args
-        self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts")
+            contacts().list()
+            _, kwargs = mock_request.call_args
+            self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts")
 
-        contacts().read(5)
-        _, kwargs = mock_request.call_args
-        self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts/5")
+            contacts().read(5)
+            _, kwargs = mock_request.call_args
+            self.assertEqual(kwargs['url'], "https://api.alegra.com/api/v1/contacts/5")
 
 
 class TestTypedExceptions(unittest.TestCase):
     """Typed errors reachable without breaking `except AlegraAPIError`."""
 
     def setUp(self):
-        session.user = None
-        session.token = None
-        session.url = "https://api.alegra.com/api/v1/"
-        session.timeout = 30
-        from alegrapy import RetryPolicy
-        session.retry = RetryPolicy(max_retries=0)
-        default_client = sys.modules['alegrapy.session'].default_client
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = None
+            session.token = None
+            session.url = "https://api.alegra.com/api/v1/"
+            session.timeout = 30
+            from alegrapy import RetryPolicy
+            session.retry = RetryPolicy(max_retries=0)
+        default_client = sys.modules['alegrapy.session']._default_client
         default_client._user = None
         default_client._token = None
         default_client._retry = None
@@ -1026,12 +1038,14 @@ class TestRetries(unittest.TestCase):
     URL = "https://api.alegra.com/api/v1/contacts"
 
     def setUp(self):
-        session.user = None
-        session.token = None
-        session.url = "https://api.alegra.com/api/v1/"
-        session.timeout = 30
-        session.retry = None
-        default_client = sys.modules['alegrapy.session'].default_client
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            session.user = None
+            session.token = None
+            session.url = "https://api.alegra.com/api/v1/"
+            session.timeout = 30
+            session.retry = None
+        default_client = sys.modules['alegrapy.session']._default_client
         default_client._user = None
         default_client._token = None
         default_client._retry = None
@@ -1678,11 +1692,13 @@ class TestIterAll(unittest.TestCase):
         self.assertTrue(callable(client.items.iter_all))
         self.assertTrue(callable(client.invoices.iter_all))
 
-        default_client = sys.modules['alegrapy.session'].default_client
-        from alegrapy import items as legacy_items
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            default_client = sys.modules['alegrapy.session'].default_client
+            from alegrapy import items as legacy_items
 
-        with patch.object(default_client, 'query', return_value=[{"id": 7}]) as mock_query:
-            self.assertEqual(list(legacy_items().iter_all()), [{"id": 7}])
+            with patch.object(default_client, 'query', return_value=[{"id": 7}]) as mock_query:
+                self.assertEqual(list(legacy_items().iter_all()), [{"id": 7}])
         mock_query.assert_called_once()
 
 
@@ -1863,19 +1879,21 @@ class TestSearchHelpers(unittest.TestCase):
         self.assertEqual(params['reference'], "SKU")
 
     def test_helpers_are_reachable_from_legacy_modules(self):
-        default_client = sys.modules['alegrapy.session'].default_client
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            default_client = sys.modules['alegrapy.session'].default_client
 
-        with patch.object(default_client, 'query',
-                          return_value=[{"id": 1, "identification": "1"}]) as mock_query:
-            found = contacts().find_by_identification("1")
-        self.assertEqual([record["id"] for record in found], [1])
-        mock_query.assert_called_once()
+            with patch.object(default_client, 'query',
+                              return_value=[{"id": 1, "identification": "1"}]) as mock_query:
+                found = contacts().find_by_identification("1")
+            self.assertEqual([record["id"] for record in found], [1])
+            mock_query.assert_called_once()
 
-        with patch.object(default_client, 'query',
-                          return_value=[{"id": 2, "reference": "SKU"}]) as mock_query:
-            found = items().find_by_reference("SKU")
-        self.assertEqual([record["id"] for record in found], [2])
-        mock_query.assert_called_once()
+            with patch.object(default_client, 'query',
+                              return_value=[{"id": 2, "reference": "SKU"}]) as mock_query:
+                found = items().find_by_reference("SKU")
+            self.assertEqual([record["id"] for record in found], [2])
+            mock_query.assert_called_once()
 
 
 if __name__ == '__main__':

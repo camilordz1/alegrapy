@@ -3,6 +3,7 @@ import numbers
 import re
 from typing import Any, Dict, Iterator, List, Optional, Union
 
+from alegrapy._deprecation import warn_legacy
 from alegrapy.exceptions import AlegraAPIError
 
 _ID_PATTERN = re.compile(r'[A-Za-z0-9_-]+')
@@ -53,8 +54,15 @@ class Actions:
         """Get the client instance for this resource."""
         if self._client is not None:
             return self._client
-        from alegrapy.session import default_client
-        return default_client
+        from alegrapy.session import _default_client
+        warn_legacy(
+            "actions.default_client",
+            f"{type(self).__name__}() without an explicit AlegraClient uses the deprecated "
+            "global default client; pass client=AlegraClient(...) or use client.<resource>. "
+            "The global session will be removed in 1.0.",
+            stacklevel=2,
+        )
+        return _default_client
 
     @client.setter
     def client(self, value: Optional['AlegraClient']) -> None:
