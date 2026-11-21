@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
+from alegrapy._deprecation import warn_legacy
 from alegrapy.actions import Actions
 
 
@@ -18,6 +19,10 @@ class PurchaseOrders(Actions):
                    subject: Optional[str] = None, message: Optional[str] = None) -> Any:
         """Send purchase order by email.
 
+        .. deprecated:: 0.3.0
+            ``POST /purchase-orders/{id}/email`` is not documented by Alegra; this method
+            will be removed in 1.0.
+
         Args:
             id (int or str): Purchase order ID.
             emails (list or str): Email address or list of email addresses to send to.
@@ -31,6 +36,11 @@ class PurchaseOrders(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
+        warn_legacy(
+            "purchase_orders.send_email",
+            "PurchaseOrders.send_email() calls POST /purchase-orders/{id}/email, which is "
+            "not documented by Alegra and will be removed in 1.0.",
+        )
         endpoint = self._resource_url(id, "email")
         data: Dict[str, Any] = {
             "emails": emails if isinstance(emails, list) else [emails],
@@ -58,6 +68,10 @@ class PurchaseOrders(Actions):
     def add_comment(self, id: Union[int, str], comment_text: str) -> Any:
         """Add comments to a purchase order.
 
+        .. deprecated:: 0.3.0
+            ``POST /purchase-orders/{id}/comments`` is not documented by Alegra
+            (comments are documented only on bills); this method will be removed in 1.0.
+
         Args:
             id (int or str): Purchase order ID.
             comment_text (str): The text comment to add.
@@ -68,6 +82,12 @@ class PurchaseOrders(Actions):
         Raises:
             ValueError: If the ID is not a valid resource identifier.
         """
+        warn_legacy(
+            "purchase_orders.add_comment",
+            "PurchaseOrders.add_comment() calls POST /purchase-orders/{id}/comments, which is "
+            "not documented by Alegra (comments are documented only on bills) and will be "
+            "removed in 1.0.",
+        )
         endpoint = self._resource_url(id, "comments")
         data = {"comments": comment_text}
         return self.client.query('post', endpoint, data=data)

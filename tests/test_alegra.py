@@ -220,7 +220,9 @@ class TestAlegraPy(unittest.TestCase):
         client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
         
         # Test void
-        res_void = client.estimates.void(123)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            res_void = client.estimates.void(123)
         self.assertEqual(res_void, {"status": "void"})
         args, kwargs = mock_request.call_args
         method = kwargs.get('method') or args[0]
@@ -247,7 +249,9 @@ class TestAlegraPy(unittest.TestCase):
         mock_request.return_value = mock_response
 
         client = AlegraClient(user="user", token="token", retry=RetryPolicy(max_retries=0))
-        client.purchase_orders.add_comment(456, "PO Comment")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            client.purchase_orders.add_comment(456, "PO Comment")
 
         args, kwargs = mock_request.call_args
         method = kwargs.get('method') or args[0]
@@ -365,11 +369,15 @@ class TestAlegraPy(unittest.TestCase):
         with self.assertRaises(ValueError):
             client.invoices.void("1/../../users/self")
         with self.assertRaises(ValueError):
-            client.estimates.void("1/../../users/self")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                client.estimates.void("1/../../users/self")
         with self.assertRaises(ValueError):
             client.payments.open("../x")
         with self.assertRaises(ValueError):
-            client.purchase_orders.add_comment("1/x", "hi")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                client.purchase_orders.add_comment("1/x", "hi")
         with self.assertRaises(ValueError):
             client.invoices.send_email("1/x", "a@example.com")
 
