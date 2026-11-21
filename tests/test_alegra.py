@@ -727,9 +727,11 @@ class TestAlegraPy(unittest.TestCase):
     def test_base_url_without_trailing_slash_builds_correct_urls(self, mock_request):
         mock_request.return_value = self._ok_response()
 
+        from alegrapy import RetryPolicy
         for base in ("https://api.alegra.com/api/v1", "https://api.alegra.com/api/v1/"):
             with self.subTest(base=base):
-                client = AlegraClient(user="user", token="token", url=base)
+                client = AlegraClient(user="user", token="token", url=base,
+                                      retry=RetryPolicy(max_retries=0))
 
                 client.contacts.list()
                 _, kwargs = mock_request.call_args
