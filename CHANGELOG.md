@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Reverted the 0.3.0 deprecation of `Estimates.void`, `Estimates.open`, `PurchaseOrders.send_email` and `PurchaseOrders.add_comment`: a live check showed their endpoints exist; they no longer emit `FutureWarning`.
+
 ## [0.3.0] - 2026-11-21
 
 Compared against `0.2.0`.
