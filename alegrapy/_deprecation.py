@@ -8,6 +8,7 @@ from typing import Set
 
 _LOCK = threading.Lock()
 _WARNED: Set[str] = set()
+_EMITTING: Set[str] = set()  # features whose warning is being delivered right now
 
 # Frames inside these directories are library internals; the warning is attributed to
 # the first frame outside them (the caller's line), whatever the internal call depth.
@@ -34,19 +35,26 @@ def warn_legacy(feature: str, message: str) -> None:
     at the application line that used the legacy API. A feature only counts as warned once
     ``warnings.warn`` returns: when a filter turns the warning into an exception, the next
     use raises again. A warning dropped by an ``ignore`` filter still counts as delivered,
-    because ``warnings`` gives no way to tell it apart. Two threads racing on the first use
-    may both warn; that is preferable to holding the lock while user filters and
-    ``showwarning`` hooks run.
+    because ``warnings`` gives no way to tell it apart. While a feature's warning is being
+    delivered, other uses of that feature (from a ``showwarning`` hook or another thread)
+    return silently, so a hook that touches the legacy API cannot recurse. The lock is
+    never held while user filters and hooks run.
     """
     with _LOCK:
-        if feature in _WARNED:
+        if feature in _WARNED or feature in _EMITTING:
             return
-    warnings.warn(message, FutureWarning, stacklevel=_caller_stacklevel())
-    with _LOCK:
-        _WARNED.add(feature)
+        _EMITTING.add(feature)
+    try:
+        warnings.warn(message, FutureWarning, stacklevel=_caller_stacklevel())
+        with _LOCK:
+            _WARNED.add(feature)
+    finally:
+        with _LOCK:
+            _EMITTING.discard(feature)
 
 
 def reset_legacy_warnings() -> None:
     """Clear the warned-once registry (intended for tests)."""
     with _LOCK:
         _WARNED.clear()
+        _EMITTING.clear()

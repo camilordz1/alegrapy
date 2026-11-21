@@ -265,7 +265,6 @@ class TestWarnOnceRegistry(unittest.TestCase):
         from alegrapy._deprecation import reset_legacy_warnings
 
         self.saved = {name: getattr(session, name) for name in ("user", "url")}
-        self.session_module = importlib.import_module("alegrapy.session")
         reset_legacy_warnings()
         self.addCleanup(self._restore)
 
@@ -297,6 +296,33 @@ class TestWarnOnceRegistry(unittest.TestCase):
             warn_legacy("test.feature", "test message")
             warn_legacy("test.feature", "test message")
         self.assertEqual(len(caught), 1)
+
+    def test_ignored_warning_counts_as_delivered(self):
+        from alegrapy._deprecation import warn_legacy
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            warn_legacy("test.ignored", "test message")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            warn_legacy("test.ignored", "test message")
+        self.assertEqual(caught, [])
+
+    def test_reentrant_use_from_showwarning_hook_warns_once(self):
+        from alegrapy._deprecation import warn_legacy
+
+        delivered = []
+
+        def hook(message, category, filename, lineno, file=None, line=None):
+            delivered.append(str(message))
+            warn_legacy("test.reentrant", "test message")
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("always")
+            warnings.showwarning = hook
+            warn_legacy("test.reentrant", "test message")
+            warn_legacy("test.reentrant", "test message")
+        self.assertEqual(delivered, ["test message"])
 
     def _url_warnings(self, url):
         client = AlegraClient(user="u", token="t", retry=RetryPolicy(max_retries=0))
