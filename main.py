@@ -1,4 +1,4 @@
-from alegrapy import AlegraClient, session, users, estimates, bank_accounts
+from alegrapy import AlegraClient, invoices, session, users
 from decouple import config
 
 if __name__ == '__main__':
@@ -34,14 +34,14 @@ if __name__ == '__main__':
     except Exception as e:
         print("Error al obtener cuentas bancarias:", e)
 
-    print("\n--- Probando con el estilo heredado (Compatibilidad) ---")
+    print("\n--- Probando con el estilo heredado (Compatibilidad, deprecado) ---")
     session.user = user
     session.token = token
 
-    # 4. Listar facturas (utilizando los nuevos valores por defecto: start=0, limit=30)
+    # 4. Listar facturas usando el recurso heredado (emite FutureWarning; se eliminará en 1.0)
     try:
-        print("\nListando facturas...")
-        facturas = client.invoices.list(limit=3, start=10)
+        print("\nListando facturas (Legacy)...")
+        facturas = invoices().list(limit=3, start=0)
         print("Facturas obtenidas:", len(facturas))
     except Exception as e:
         print("Error al obtener facturas:", e) 

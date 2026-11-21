@@ -67,10 +67,43 @@ También puedes pasar un cliente a un recurso legacy: `Invoices(client)`.
 - **Menos riesgo de mezclar credenciales** en aplicaciones concurrentes o con varios usuarios. Ver [Concurrencia y ciclo de vida](concurrencia.md).
 - **Configuración explícita** de URL y timeout por instancia.
 
-## Cuándo el estilo legacy aún tiene sentido
+## Qué cambia al actualizar
 
-- Scripts pequeños con una sola cuenta que ya usan `session`.
-- Código existente que no quieres tocar: sigue funcionando igual.
+Si actualizas código antiguo desde la versión `0.0.4`, ten en cuenta estos cambios de comportamiento respecto al estilo anterior:
+
+- **Excepciones tipadas en lugar de `None`**: ante respuestas no 2xx o fallos de red, ahora se lanzan subclases de `AlegraAPIError` en vez de registrar un log y devolver `None`.
+- **`delete()` envía un `DELETE` real**: anteriormente `actions.delete` enviaba un `GET` sin efecto; ahora elimina el recurso en Alegra.
+- **Sin archivo `alegra.log` automático**: la librería usa el logger `"alegra"` sin handlers propios; configura el logging en tu aplicación.
+- **Reintentos activados por defecto**: `AlegraClient` y la sesión global reintentan fallos transitorios (`RetryPolicy(max_retries=2)`). Puedes desactivarlos con `RetryPolicy(max_retries=0)`.
+- **Avisos de deprecación (`FutureWarning`)**: asignar atributos en `session`, usar `session.query()`, `session.create_auth()`, `default_client`, recursos sin cliente (`invoices()`) o clientes que dependen de credenciales/configuración global emite un `FutureWarning` una vez por proceso (su eliminación está planeada para `1.0`). Mientras migras, puedes silenciarlos temporalmente en tu aplicación con:
+
+```python
+import warnings
+
+warnings.filterwarnings("ignore", category=FutureWarning, module="alegrapy")
+```
+
+## Ejemplo antes y después
+
+=== "Antes (legacy)"
+
+    ```python
+    from alegrapy import session, invoices
+
+    session.user = "tu_usuario@dominio.com"
+    session.token = "tu_token_api"
+
+    facturas = invoices().list(start=0, limit=5)
+    ```
+
+=== "Después (`AlegraClient`)"
+
+    ```python
+    from alegrapy import AlegraClient
+
+    with AlegraClient(user="tu_usuario@dominio.com", token="tu_token_api") as client:
+        facturas = client.invoices.list(start=0, limit=5)
+    ```
 
 ## Notas de compatibilidad
 

@@ -17,6 +17,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Electronic stamping (DIAN emission) API**: `invoices.stamp(ids)`, `invoices.stamp_status(id)`, and `invoices.wait_until_stamped(id, timeout=60.0, interval=2.0)`, along with typed `StampState`, `StampStatus`, `StampResult`, and `AlegraStampTimeoutError`.
 
+### Deprecated
+
+- **Legacy global `session` and `default_client`** (emits a once-per-process `FutureWarning`, planned for removal in `1.0.0`):
+  - Assigning attributes on `session` (`session.user = ...`, `session.token = ...`, `session.url = ...`, `session.timeout = ...`, `session.retry = ...`, etc.).
+  - Calling `session.query()` or `session.create_auth()`.
+  - Accessing `alegrapy.session.default_client`.
+  - Instantiating resources without an explicit `AlegraClient` (e.g. `invoices()`, `Contacts()`).
+  - Sending requests with an `AlegraClient` that falls back to `session.user`/`session.token` or non-default `session.url`/`session.timeout`/`session.retry`.
+
+### Security
+
+- `session.create_auth()` no longer encodes or stores an `Authorization` header in the global `session.headers` dictionary (and removes any stale `Authorization` key defensively).
+
 ## [0.1.0] - 2026-11-20
 
 Compared against the previous PyPI release (`0.0.4`).
