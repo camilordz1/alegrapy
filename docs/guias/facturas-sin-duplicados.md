@@ -191,7 +191,7 @@ selecciones distintas sobre el mismo payload nunca producen la misma clave.
 client.invoices.reconcile(dedup_key, client_id, lookup_pages=2, date="2026-11-21")
 ```
 
-Devuelve la factura cuya línea `observations` coincide exactamente con la marca, o `None`. Si indicas `date` (o si `params["date"]` está presente en `create_once`), el SDK consulta primero las facturas de ese día usando el filtro `date` del servidor (hasta `lookup_pages * 30` registros) y, si no la encuentra, recurre al barrido sin filtro de fecha sobre las más recientes del cliente (`order_field=id`, `order_direction=DESC`). Así se evita perder la factura en clientes con mucho volumen diario sin debilitar el comportamiento anterior. Los borradores y las facturas abiertas también cuentan, porque un borrador ya puede consumir un número DIAN.
+Devuelve la factura cuya línea `observations` coincide exactamente con la marca, o `None`. Si indicas `date` (o si `params["date"]` está presente en `create_once`), el SDK consulta primero las facturas de ese día usando el filtro `date` del servidor (hasta `lookup_pages * 30` registros) y, si no la encuentra, recurre al barrido sin filtro de fecha sobre las más recientes del cliente (`order_field=id`, `order_direction=DESC`). Así se evita perder la factura en clientes con mucho volumen diario sin debilitar el comportamiento anterior. Ten en cuenta que, con `date`, cada búsqueda puede hacer hasta dos pasadas (día filtrado y luego ventana reciente), por lo que la ventana de verificación emite aproximadamente el doble de peticiones `GET` (Alegra limita a 150 peticiones por minuto). Los borradores y las facturas abiertas también cuentan, porque un borrador ya puede consumir un número DIAN.
 
 ## Medir la latencia del listado (`verify_window`)
 

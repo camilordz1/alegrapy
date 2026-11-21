@@ -284,6 +284,8 @@ class Invoices(Actions):
             raise ValueError("params must be a dict")
         lookup_date = validate_lookup_date(params.get("date"))
         payload = payload_with_marker(params, key)
+        if lookup_date is not None:
+            payload["date"] = lookup_date
         client_id = self._client_id_from(params)
 
         return run_create_once(
