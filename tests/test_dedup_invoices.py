@@ -408,5 +408,162 @@ class TestCreateOnce(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
 
+class TestInvoiceDedupDateFilter(unittest.TestCase):
+
+    def setUp(self):
+        self.client = AlegraClient(
+            user="user",
+            token="token",
+            retry=alegrapy.RetryPolicy(max_retries=0),
+        )
+
+    @staticmethod
+    def _mock_response(payload, status=200):
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.status_code = status
+        resp.text = json.dumps(payload)
+        resp.json.return_value = payload
+        resp.headers = {}
+        return resp
+
+    @staticmethod
+    def _params(**extra):
+        return {"client": {"id": 126}, "items": [{"id": 1, "price": 10}], **extra}
+
+    def test_reconcile_with_date_sends_date_filter_and_stops_when_found(self):
+        invoice = {"id": 55, "observations": MARKER}
+        with patch.object(
+            self.client.session, "request", return_value=self._mock_response([invoice])
+        ) as mock_req:
+            result = self.client.invoices.reconcile("order-1", 126, date="2026-11-21")
+
+        self.assertEqual(result, invoice)
+        self.assertEqual(mock_req.call_count, 1)
+        call_kwargs = mock_req.call_args.kwargs
+        self.assertEqual(call_kwargs["method"].lower(), "get")
+        self.assertEqual(call_kwargs["url"], "https://api.alegra.com/api/v1/invoices")
+        self.assertEqual(
+            call_kwargs["params"],
+            {
+                "client_id": 126,
+                "order_field": "id",
+                "order_direction": "DESC",
+                "date": "2026-11-21",
+                "start": 0,
+                "limit": 30,
+            },
+        )
+
+    def test_reconcile_with_date_falls_back_to_unfiltered_scan_and_bounds_pages(self):
+        import datetime as dt
+
+        full_page = [{"id": i, "observations": None} for i in range(30)]
+        invoice = {"id": 99, "observations": MARKER, "date": "2026-11-20"}
+        responses = [
+            self._mock_response(full_page),
+            self._mock_response([]),
+            self._mock_response(full_page),
+            self._mock_response([invoice]),
+        ]
+        with patch.object(self.client.session, "request", side_effect=responses) as mock_req:
+            result = self.client.invoices.reconcile(
+                "order-1", 126, lookup_pages=2, date=dt.date(2026, 11, 21)
+            )
+
+        self.assertEqual(result, invoice)
+        self.assertEqual(mock_req.call_count, 4)
+        self.assertEqual(mock_req.call_args_list[0].kwargs["params"]["date"], "2026-11-21")
+        self.assertEqual(mock_req.call_args_list[1].kwargs["params"]["date"], "2026-11-21")
+        self.assertNotIn("date", mock_req.call_args_list[2].kwargs["params"])
+        self.assertNotIn("date", mock_req.call_args_list[3].kwargs["params"])
+
+    def test_reconcile_without_date_matches_020_request_sequence(self):
+        with patch.object(
+            self.client.session, "request", return_value=self._mock_response([])
+        ) as mock_req:
+            result = self.client.invoices.reconcile("order-1", 126, lookup_pages=1)
+
+        self.assertIsNone(result)
+        self.assertEqual(mock_req.call_count, 1)
+        params = mock_req.call_args.kwargs["params"]
+        self.assertNotIn("date", params)
+        self.assertEqual(
+            params,
+            {
+                "client_id": 126,
+                "order_field": "id",
+                "order_direction": "DESC",
+                "start": 0,
+                "limit": 30,
+            },
+        )
+
+    def test_reconcile_invalid_date_raises_before_request(self):
+        import datetime as dt
+
+        bad_dates = [
+            "2026-13-01",
+            "21/11/2026",
+            "2026-11-21T10:00",
+            dt.datetime(2026, 11, 21, 10, 0),
+            True,
+            12345,
+        ]
+        for bad in bad_dates:
+            with self.subTest(bad_date=bad):
+                with patch.object(self.client.session, "request") as mock_req:
+                    with self.assertRaises(ValueError):
+                        self.client.invoices.reconcile("order-1", 126, date=bad)
+                    mock_req.assert_not_called()
+
+    def test_create_once_passes_payload_date_to_precheck_and_verify_lookups(self):
+        create_once_mod = importlib.import_module("alegrapy._create_once")
+        invoice = {"id": 77, "observations": MARKER}
+        responses = [
+            self._mock_response([]),  # precheck filtered
+            self._mock_response([]),  # precheck unfiltered
+            requests.exceptions.ReadTimeout("timeout"),  # 1st POST
+            self._mock_response([invoice]),  # verify filtered
+        ]
+        with patch.object(self.client.session, "request", side_effect=responses) as mock_req:
+            with patch.object(create_once_mod.time, "monotonic", side_effect=[0.0, 0.0]):
+                with patch.object(create_once_mod.time, "sleep"):
+                    result = self.client.invoices.create_once(
+                        self._params(date="2026-11-21"),
+                        "order-1",
+                        verify_window=10,
+                    )
+
+        self.assertEqual(result, invoice)
+        gets = [c for c in mock_req.call_args_list if c.kwargs["method"].lower() == "get"]
+        self.assertEqual(gets[0].kwargs["params"]["date"], "2026-11-21")
+        self.assertNotIn("date", gets[1].kwargs["params"])
+        self.assertEqual(gets[2].kwargs["params"]["date"], "2026-11-21")
+
+    def test_create_once_invalid_date_raises_before_request(self):
+        with patch.object(self.client.session, "request") as mock_req:
+            with self.assertRaises(ValueError):
+                self.client.invoices.create_once(self._params(date="21/11/2026"), "order-1")
+            mock_req.assert_not_called()
+
+    def test_latency_script_refuses_without_confirmation_flag(self):
+        import pathlib
+
+        script_path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "measure_list_latency.py"
+        spec = importlib.util.spec_from_file_location("measure_list_latency", script_path)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with patch("requests.request") as mock_req, patch("requests.Session.request") as mock_sess:
+            with self.assertRaises(SystemExit) as ctx:
+                module.main(["--client-id", "126", "--item-id", "1"])
+            self.assertNotEqual(ctx.exception.code, 0)
+            mock_req.assert_not_called()
+            mock_sess.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
