@@ -1,12 +1,13 @@
 """Maintainer probe for undocumented Alegra endpoints (NOT shipped in wheel/sdist).
 
 Posts to a non-existent ID and compares the response against a documented sibling
-GET route to tell whether the route exists or is missing.
+GET route, printing status, verdict, and body excerpts for manual audit.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from typing import Optional, Sequence
@@ -24,17 +25,29 @@ TARGETS = (
 )
 
 
+def _excerpt(text: str, limit: int = 120) -> str:
+    collapsed = " ".join(text.split())
+    return collapsed[:limit]
+
+
+def _has_json_object(text: str) -> bool:
+    try:
+        return isinstance(json.loads(text), dict)
+    except (ValueError, TypeError):
+        return False
+
+
 def _classify(post_resp: requests.Response, sibling_resp: requests.Response) -> str:
     if post_resp.status_code in (400, 422):
         return "route exists"
+    if post_resp.status_code in (405, 501):
+        return "route missing"
     if post_resp.status_code == 404:
         if sibling_resp.status_code == 404 and post_resp.text == sibling_resp.text:
             return "route exists"
-        if "route" in post_resp.text.lower() or "not found" in post_resp.text.lower():
+        if not _has_json_object(post_resp.text):
             return "route missing"
         return "inconclusive"
-    if post_resp.status_code in (405, 501):
-        return "route missing"
     return "inconclusive"
 
 
@@ -66,14 +79,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     session.headers["Accept"] = "application/json"
 
     siblings: dict[str, requests.Response] = {}
-    print(f"{'Route':<38} {'Status':<8} Verdict")
-    print("-" * 64)
+    print(f"{'Route':<38} {'Status':<8} {'Verdict':<15} {'POST body':<30} Sibling GET body")
+    print("-" * 110)
     for label, post_path, body, sibling_path in TARGETS:
         if sibling_path not in siblings:
             siblings[sibling_path] = session.get(f"{BASE_URL}{sibling_path}", timeout=args.timeout)
+        sibling_resp = siblings[sibling_path]
         post_resp = session.post(f"{BASE_URL}{post_path}", json=body, timeout=args.timeout)
-        verdict = _classify(post_resp, siblings[sibling_path])
-        print(f"{label:<38} {post_resp.status_code:<8} {verdict}")
+        verdict = _classify(post_resp, sibling_resp)
+        print(
+            f"{label:<38} {post_resp.status_code:<8} {verdict:<15} "
+            f"{_excerpt(post_resp.text)} | {_excerpt(sibling_resp.text)}"
+        )
     return 0
 
 

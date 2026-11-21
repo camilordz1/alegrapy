@@ -464,6 +464,54 @@ class TestUndocumentedEndpointDeprecations(unittest.TestCase):
             mock_req.assert_not_called()
             mock_sess.assert_not_called()
 
+    def test_probe_classify_and_excerpt(self):
+        import pathlib
+        from types import SimpleNamespace
+
+        script_path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "probe_undocumented_routes.py"
+        spec = importlib.util.spec_from_file_location("probe_undocumented_routes", script_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        def fake_resp(status_code, text):
+            return SimpleNamespace(status_code=status_code, text=text)
+
+        self.assertEqual(
+            module._classify(
+                fake_resp(404, '{"code": 404, "message": "Not found"}'),
+                fake_resp(404, '{"code": 404, "message": "Not found"}'),
+            ),
+            "route exists",
+        )
+        self.assertEqual(
+            module._classify(
+                fake_resp(404, '{"code": 404, "message": "Documento no encontrado"}'),
+                fake_resp(404, '{"code": 404, "message": "Cotización no encontrada"}'),
+            ),
+            "inconclusive",
+        )
+        self.assertEqual(
+            module._classify(
+                fake_resp(405, '{"message": "Method Not Allowed"}'),
+                fake_resp(404, '{"message": "Not found"}'),
+            ),
+            "route missing",
+        )
+        self.assertEqual(
+            module._classify(
+                fake_resp(404, "<html>Cannot POST /estimates/999999999/void</html>"),
+                fake_resp(404, '{"message": "Not found"}'),
+            ),
+            "route missing",
+        )
+
+        long_text = "  hola \n\t mundo   " + ("x" * 200)
+        excerpt = module._excerpt(long_text)
+        self.assertLessEqual(len(excerpt), 120)
+        self.assertNotIn("\n", excerpt)
+        self.assertNotIn("\t", excerpt)
+        self.assertTrue(excerpt.startswith("hola mundo "))
+
 
 
 if __name__ == "__main__":
