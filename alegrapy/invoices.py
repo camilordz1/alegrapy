@@ -15,9 +15,10 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
-from alegrapy._create_once import (contains_marker, marker_for, payload_with_marker,
-                                 run_create_once, validate_dedup_key,
-                                 validate_lookup_pages, validate_verify_window)
+from alegrapy._create_once import (client_id_from, contains_marker, marker_for,
+                                 payload_with_marker, run_create_once,
+                                 validate_dedup_key, validate_lookup_pages,
+                                 validate_verify_window)
 from alegrapy.actions import Actions, validate_id
 from alegrapy.credit_notes import CreditNoteOperationType, CreditNoteType
 from alegrapy.dedup import make_dedup_key
@@ -285,13 +286,9 @@ class Invoices(Actions):
     @staticmethod
     def _client_id_from(params: Dict[str, Any]) -> Union[int, str]:
         """Read and validate the client id required for the dedup lookup."""
-        client = params.get("client")
-        raw = client.get("id") if isinstance(client, dict) else client
-        if raw is None:
-            raise ValueError(
-                "params['client'] must provide the client id used for the dedup lookup"
-            )
-        return validate_id(raw)
+        client_id = client_id_from(params, required=True)
+        assert client_id is not None
+        return client_id
 
     def annul(self, id: Union[int, str], cause: str, *, dedup_key: Optional[str] = None,
               operation_type: Any = None, number_template_id: Any = None,

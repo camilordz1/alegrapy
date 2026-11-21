@@ -1,6 +1,7 @@
-"""Shared duplicate-safe create flow used by invoices and credit notes.
+"""Shared duplicate-safe create flow used by invoices, credit notes, and payments.
 
-Private module: callers use ``Invoices.create_once`` or ``Invoices.annul``.
+Private module: callers use ``Invoices.create_once``, ``Invoices.annul``, or
+``Payments.create_once``.
 """
 import copy
 import logging
@@ -8,8 +9,9 @@ import math
 import numbers
 import re
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
+from alegrapy.actions import validate_id
 from alegrapy.exceptions import (AlegraAlreadyAnnulledError, AlegraAPIError, AlegraStampError,
                                AlegraUnverifiedCreateError)
 from alegrapy.retry import _may_have_been_processed
@@ -62,6 +64,38 @@ def validate_verify_window(verify_window: Any) -> float:
             or not math.isfinite(verify_window) or verify_window < 0):
         raise ValueError("verify_window must be a finite, non-negative number")
     return float(verify_window)
+
+
+def client_id_from(params: Dict[str, Any], *,
+                   required: bool = True) -> Union[int, str, None]:
+    """Read and validate the client id from ``params['client']``.
+
+    Accepts ``{"id": x}`` or a bare id. When ``required`` is True, a missing
+    client raises ``ValueError``; when False, it returns ``None``.
+    """
+    client = params.get("client")
+    raw = client.get("id") if isinstance(client, dict) else client
+    if raw is None:
+        if required:
+            raise ValueError(
+                "params['client'] must provide the client id used for the dedup lookup"
+            )
+        return None
+    return validate_id(raw)
+
+
+def record_client_id(record: Any) -> Optional[str]:
+    """Return a record's client id as a comparable string, when present and valid."""
+    if not isinstance(record, dict):
+        return None
+    client = record.get("client")
+    raw = client.get("id") if isinstance(client, dict) else client
+    if raw is None:
+        return None
+    try:
+        return str(validate_id(raw))
+    except ValueError:
+        return None
 
 
 def payload_with_marker(params: Dict[str, Any], key: str) -> Dict[str, Any]:
