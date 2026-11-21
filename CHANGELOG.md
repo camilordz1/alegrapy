@@ -9,9 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **While on `0.y.z`**: a `MINOR` bump (`0.1` -> `0.2`) **may** include breaking changes (always listed under **Breaking changes**); a `PATCH` bump (`0.1.0` -> `0.1.1`) contains fixes only.
 - **From `1.0.0` onward**: breaking changes appear only in `MAJOR` releases; deprecations are announced at least one `MINOR` release before removal with a warning.
 - **Planned for `1.0.0`**: remove the `alegra` compatibility shim and the legacy global `session`, and rename the `"alegra"` logger.
-- **Pinning recommendation**: pin `AlegraPy>=0.1,<0.2` until `1.0.0`.
+- **Pinning recommendation**: pin `AlegraPy>=0.2,<0.3` until `1.0.0`.
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-11-21
+
+Compared against `0.1.0`.
+
+### Breaking changes
+
+- **Legacy global API emits `FutureWarning`**: code that still uses the global `session`, `default_client`, or resources without an explicit `AlegraClient` now warns once per feature. Test suites that run with `-W error` (or `filterwarnings = error`) will fail until they migrate to `AlegraClient` or filter the warnings (see the legacy migration guide).
+- **`session.create_auth()` is a no-op**: it no longer writes an `Authorization` header into `session.headers`. Requests were already authenticated per request, so only code that read `session.headers["Authorization"]` directly is affected.
 
 ### Added
 
