@@ -13,6 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Deprecated
+
+- **Methods on undocumented Alegra endpoints** (emit a once-per-process `FutureWarning`, planned for removal in `1.0.0`):
+  - `Estimates.void(id)` (`POST /estimates/{id}/void`).
+  - `Estimates.open(id)` (`POST /estimates/{id}/open`).
+  - `PurchaseOrders.send_email(id, ...)` (`POST /purchase-orders/{id}/email`).
+  - `PurchaseOrders.add_comment(id, text)` (`POST /purchase-orders/{id}/comments`; comments are documented only on bills).
+
 ## [0.2.0] - 2026-11-21
 
 Compared against `0.1.0`.
