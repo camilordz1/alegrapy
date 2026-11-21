@@ -39,7 +39,8 @@ class Payments(Actions):
         check ``status``). ``client_id`` and ``type`` are sent as server filters
         when given and re-checked client-side: when ``client_id`` is given, a
         record whose ``client`` is ``null`` or a different id does not match; a
-        record with a different ``type`` does not match, one without ``type`` does.
+        record with a different ``type`` does not match. A record that omits the
+        ``client`` or ``type`` key still matches, so an existing payment is not missed.
 
         Args:
             dedup_key (str): Key used when the payment was created with ``create_once``.
@@ -72,10 +73,13 @@ class Payments(Actions):
         for payment in self.iter_all(max_items=pages * 30, **filters):
             if not contains_marker(payment, marker):
                 continue
-            if expected_client is not None and record_client_id(payment) != expected_client:
+            # A record that omits ``client`` or ``type`` still matches: the server already
+            # filtered by them, and skipping it would miss an existing payment and let
+            # "retry" re-post. An explicit ``client: null`` is a client-less payment.
+            client_known = isinstance(payment, dict) and "client" in payment
+            if (expected_client is not None and client_known
+                    and record_client_id(payment) != expected_client):
                 continue
-            # A record that omits ``type`` still matches: the server already filtered by
-            # it, and skipping it would miss an existing payment and let "retry" re-post
             record_type = payment.get("type") if isinstance(payment, dict) else None
             if valid_type is not None and record_type is not None and record_type != valid_type:
                 continue

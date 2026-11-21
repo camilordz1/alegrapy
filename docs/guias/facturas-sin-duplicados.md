@@ -284,4 +284,5 @@ Particularidades de pagos frente a facturas:
   lleven la marca; revisa `pago["status"]` según la lógica de tu aplicación.
 - **Re-validación local**: cuando indicas `client_id` o `type`, el SDK los envía como filtros a
   Alegra y además vuelve a comprobarlos localmente (descartando registros con `client: null` o
-  con otro `type`; un registro que no trae `type` sí se acepta, para no perder un pago ya creado).
+  con otro `type`; un registro que no trae la clave `client` o `type` sí se acepta, para no perder un
+  pago ya creado).

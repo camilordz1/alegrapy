@@ -342,6 +342,25 @@ class TestPaymentsCreateOnce(unittest.TestCase):
                 self._wire(posts=[], lookups=[[record]])
                 self.assertIs(self.client.payments.reconcile("pay-1", client_id=requested), record)
 
+    def test_reconcile_matches_record_without_client_key(self):
+        # An explicit ``client: null`` is a different (client-less) payment; a list record
+        # that omits the key is unknown and must still match to avoid a duplicate re-post
+        record = {"id": 7, "type": "in", "observations": MARKER}
+        self._wire(posts=[], lookups=[[record]])
+
+        self.assertIs(self.client.payments.reconcile("pay-1", client_id=126), record)
+
+    def test_default_precheck_miss_posts_exactly_once_with_marker(self):
+        created = {"id": 9, "type": "in", "client": {"id": 126}, "observations": MARKER}
+        self._wire(posts=[created], lookups=[[]])
+
+        result = self.client.payments.create_once(self._params(), "pay-1")
+
+        self.assertIs(result, created)
+        self.assertEqual(len(self._gets()), 1)
+        self.assertEqual(len(self._posts()), 1)
+        self.assertEqual(self._posts()[0][2]["data"]["observations"], MARKER)
+
     def test_reconcile_skips_null_client_when_client_id_requested(self):
         records = [{"id": 1, "type": "in", "client": None, "observations": MARKER}]
         self._wire(posts=[], lookups=[records])
