@@ -4,6 +4,7 @@ Private module: callers use ``Invoices.create_once``, ``Invoices.annul``, or
 ``Payments.create_once``.
 """
 import copy
+import datetime
 import logging
 import math
 import numbers
@@ -19,6 +20,7 @@ from alegrapy.retry import _may_have_been_processed
 logger = logging.getLogger("alegra")
 
 _DEDUP_KEY_PATTERN = re.compile(r'[A-Za-z0-9_.:-]+')
+_LOOKUP_DATE_PATTERN = re.compile(r'\d{4}-\d{2}-\d{2}')
 _MARKER_PREFIX = "alegrapy:dedup:"
 _MAX_OBSERVATIONS = 500
 _VERIFY_INITIAL_INTERVAL = 1.0
@@ -64,6 +66,22 @@ def validate_verify_window(verify_window: Any) -> float:
             or not math.isfinite(verify_window) or verify_window < 0):
         raise ValueError("verify_window must be a finite, non-negative number")
     return float(verify_window)
+
+
+def validate_lookup_date(value: Any) -> Optional[str]:
+    """Validate an optional lookup date (strict ``YYYY-MM-DD`` or ``datetime.date``)."""
+    if value is None:
+        return None
+    if isinstance(value, datetime.datetime):
+        raise ValueError("date must be a datetime.date or 'YYYY-MM-DD' string, not datetime")
+    if isinstance(value, datetime.date):
+        return value.isoformat()
+    if isinstance(value, str) and _LOOKUP_DATE_PATTERN.fullmatch(value):
+        try:
+            return datetime.date.fromisoformat(value).isoformat()
+        except ValueError:
+            pass
+    raise ValueError("date must be a datetime.date or strict 'YYYY-MM-DD' string")
 
 
 def client_id_from(params: Dict[str, Any], *,

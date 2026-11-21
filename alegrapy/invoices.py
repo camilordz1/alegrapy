@@ -17,7 +17,7 @@ import requests
 
 from alegrapy._create_once import (client_id_from, contains_marker, marker_for,
                                  payload_with_marker, run_create_once,
-                                 validate_dedup_key, validate_lookup_pages,
+                                 validate_dedup_key, validate_lookup_date, validate_lookup_pages,
                                  validate_verify_window)
 from alegrapy.actions import Actions, validate_id
 from alegrapy.credit_notes import CreditNoteOperationType, CreditNoteType
@@ -175,28 +175,45 @@ class Invoices(Actions):
         super().__init__(client)
 
     def reconcile(self, dedup_key: str, client_id: Union[int, str],
-                  lookup_pages: int = 2) -> Optional[Dict[str, Any]]:
+                  lookup_pages: int = 2, *, date: Any = None) -> Optional[Dict[str, Any]]:
         """Return the newest invoice carrying ``dedup_key``, or ``None``.
 
-        Scans the newest ``lookup_pages * 30`` invoices of the client (no ``status``
-        filter, so drafts and open invoices are both considered). The marker is matched
-        against the invoice's ``observations`` as a whole stripped line.
+        When ``date`` is given, first scans up to ``lookup_pages * 30`` invoices of the
+        client with the server ``date`` filter, and falls back to the newest
+        ``lookup_pages * 30`` unfiltered invoices of the client if not found (no
+        ``status`` filter, so drafts and open invoices are both considered). The marker
+        is matched against the invoice's ``observations`` as a whole stripped line.
+
+        Limitations:
+            Coverage is the whole ``date`` day when given (up to ``lookup_pages * 30``
+            invoices on that day) plus the newest ``lookup_pages * 30`` invoices of
+            the client.
 
         Args:
             dedup_key (str): Key used when the invoice was created with ``create_once``.
             client_id (int or str): Client whose invoices are scanned.
-            lookup_pages (int): Number of 30-record pages to scan (default 2).
+            lookup_pages (int): Number of 30-record pages to scan per pass (default 2).
+            date (datetime.date or str, optional): Invoice date (``YYYY-MM-DD``) to
+                narrow the first lookup pass via the server ``date`` filter.
 
         Returns:
             dict, optional: The matching invoice, or ``None`` when not found.
 
         Raises:
-            ValueError: If the key, client id or ``lookup_pages`` are invalid.
+            ValueError: If the key, client id, ``lookup_pages`` or ``date`` are invalid.
         """
         key = validate_dedup_key(dedup_key)
         pages = validate_lookup_pages(lookup_pages)
+        lookup_date = validate_lookup_date(date)
         marker = marker_for(key)
         valid_client_id = validate_id(client_id)
+
+        if lookup_date is not None:
+            for invoice in self.iter_all(max_items=pages * 30, client_id=valid_client_id,
+                                         order_field="id", order_direction="DESC",
+                                         date=lookup_date):
+                if contains_marker(invoice, marker):
+                    return invoice
 
         for invoice in self.iter_all(max_items=pages * 30, client_id=valid_client_id,
                                      order_field="id", order_direction="DESC"):
@@ -229,14 +246,18 @@ class Invoices(Actions):
             invoice later than ``verify_window``, a second invoice can be created. Use
             ``"raise"`` plus a quarantine queue for zero-duplicate flows. Two processes
             using the same key concurrently can both miss the precheck; serialize per
-            key. The lookup only covers the newest ``lookup_pages * 30`` invoices of the
-            client, and whether ``observations`` reaches the DIAN XML is unverified.
-            ``query()`` itself may repeat a POST only when it provably was not sent
-            (429 or ``request_not_sent``), which cannot create an extra invoice.
+            key. When ``params["date"]`` is present, lookups cover up to
+            ``lookup_pages * 30`` invoices on that day plus the newest
+            ``lookup_pages * 30`` invoices of the client; otherwise only the newest
+            window is scanned. Whether ``observations`` reaches the DIAN XML is
+            unverified. ``query()`` itself may repeat a POST only when it provably was
+            not sent (429 or ``request_not_sent``), which cannot create an extra invoice.
 
         Args:
             params (dict): Payload for ``create``; ``params["client"]`` (or
-                ``params["client"]["id"]``) is required.
+                ``params["client"]["id"]``) is required. If ``params["date"]`` is
+                present, it must be a ``datetime.date`` or strict ``YYYY-MM-DD``
+                string and is used to narrow lookups.
             dedup_key (str): Stable key for this logical creation, 1..64 chars of
                 letters, digits, ``_``, ``.``, ``:`` or ``-``.
             on_unverified (str): ``"retry"`` (default) or ``"raise"``.
@@ -261,12 +282,15 @@ class Invoices(Actions):
         validate_lookup_pages(lookup_pages)
         if not isinstance(params, dict):
             raise ValueError("params must be a dict")
+        lookup_date = validate_lookup_date(params.get("date"))
         payload = payload_with_marker(params, key)
         client_id = self._client_id_from(params)
 
         return run_create_once(
             post=self.create,
-            lookup=lambda: self.reconcile(key, client_id, lookup_pages=lookup_pages),
+            lookup=lambda: self.reconcile(
+                key, client_id, lookup_pages=lookup_pages, date=lookup_date
+            ),
             payload=payload,
             dedup_key=key,
             client_id=client_id,
