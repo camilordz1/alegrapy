@@ -44,6 +44,11 @@ from alegrapy.webhooks import (
 )
 from alegrapy.bills import Bills
 from alegrapy.debit_notes import DebitNotes
+from alegrapy.remissions import Remissions
+from alegrapy.warehouses import Warehouses
+from alegrapy.price_lists import PriceLists
+from alegrapy.item_categories import ItemCategories
+from alegrapy.terms import Terms
 
 __all__ = [
     '__version__',
@@ -106,5 +111,10 @@ __all__ = [
     'AlegraWebhookError',
     'Bills',
     'DebitNotes',
+    'Remissions',
+    'Warehouses',
+    'PriceLists',
+    'ItemCategories',
+    'Terms',
 ]
 
