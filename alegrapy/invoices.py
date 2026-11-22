@@ -742,15 +742,12 @@ class Invoices(Actions):
             }
             if item.get("tax") is not None:
                 tax = item["tax"]
-                if isinstance(tax, (list, tuple)):
-                    entry["tax"] = [
-                        validate_id(element.get("id") if isinstance(element, dict) else element)
-                        for element in tax
-                    ]
-                else:
-                    entry["tax"] = [
-                        validate_id(tax.get("id") if isinstance(tax, dict) else tax)
-                    ]
+                elements = tax if isinstance(tax, (list, tuple)) else [tax]
+                # Alegra requires {"id": ...} objects, not bare ids
+                entry["tax"] = [
+                    {"id": validate_id(element.get("id") if isinstance(element, dict) else element)}
+                    for element in elements
+                ]
             for field in ("reference", "description"):
                 if field in item:
                     entry[field] = item[field]
