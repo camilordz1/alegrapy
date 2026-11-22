@@ -19,5 +19,7 @@ Esta sección se genera automáticamente a partir de los docstrings del código 
 | [Monedas](currencies.md) | `Currencies` |
 | [Retenciones](retentions.md) | `Retentions` |
 | [Usuarios](users.md) | `Users` |
+| [Numeraciones](number_templates.md) | `NumberTemplates` |
+| [Empresa](company.md) | `Company` |
 
 Para los campos de cada recurso consulta la [documentación oficial de Alegra](https://developer.alegra.com/).
