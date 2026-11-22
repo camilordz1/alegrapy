@@ -16,7 +16,7 @@ AlegraPy sigue [Semantic Versioning](https://semver.org/lang/es/) (`MAJOR.MINOR.
 Mientras la librería esté en `0.y.z`, fija el rango menor para evitar actualizaciones inesperadas entre versiones `MINOR`:
 
 ```text
-AlegraPy>=0.4,<0.5
+AlegraPy>=0.5,<0.6
 ```
 
 ## Cambios planeados para 1.0.0

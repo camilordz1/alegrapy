@@ -1,2 +1,2 @@
 """Single source of the package version (read by pyproject.toml at build time)."""
-__version__ = "0.4.0"
+__version__ = "0.5.0"
