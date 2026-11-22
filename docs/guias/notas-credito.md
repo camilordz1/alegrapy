@@ -96,8 +96,7 @@ causa (`err.__cause__`) es el `AlegraAlreadyAnnulledError`.
 Una factura cerrada porque fue **pagada** (`balance` o `totalPaid` mayores que cero) no está
 anulada: sigue siendo un error de precondición (solo se anulan facturas abiertas).
 
-Como la lista de notas no permite filtrar por cliente, la búsqueda recorre las notas más
-recientes de toda la cuenta. En cuentas muy activas puedes ampliar la ventana:
+La búsqueda envía `client_id` y, cuando la nota tiene fecha (`date`), usa primero el filtro `date` del servidor (hasta `lookup_pages * 30` notas de ese día) antes de recurrir al barrido sin filtro de fecha. Ten en cuenta que con `date` cada búsqueda puede hacer hasta dos pasadas (día filtrado y luego ventana sin fecha), por lo que la ventana de verificación emite aproximadamente el doble de peticiones `GET` (Alegra limita a 150 peticiones por minuto). En cuentas muy activas puedes ampliar la ventana:
 
 ```python
 client.invoices.annul(11742, "motivo", lookup_pages=5)  # hasta 150 notas
@@ -111,9 +110,7 @@ existe, la devuelve y **no hace POST**. Si el POST falla de forma ambigua, verif
 `verify_window` segundos (30 por defecto) y, si no aparece, reintenta una vez como máximo. Si sigue
 sin poder confirmarlo, lanza `AlegraUnverifiedCreateError` con `resource="credit-notes"`.
 
-El endpoint de notas no documenta un filtro por cliente, así que la búsqueda es por `id`
-descendente y la marca se compara del lado del cliente (además del `client.id` de la nota cuando
-está presente).
+La búsqueda envía `client_id` como filtro al servidor (y cuando hay fecha, filtra primero por `date`) y vuelve a comprobar la marca y el `client.id` del lado del cliente.
 
 Puedes sobrescribir la clave:
 
