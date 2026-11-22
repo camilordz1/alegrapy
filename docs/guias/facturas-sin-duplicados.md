@@ -202,6 +202,13 @@ ALEGRA_USER=... ALEGRA_TOKEN=... python scripts/measure_list_latency.py \
   --yes-call-live-api --client-id <ID_CLIENTE> --item-id <ID_ITEM> --delete
 ```
 
+La factura se crea con `paymentForm` `CASH` por defecto, que Alegra exige en Colombia; usa
+`--payment-form CREDIT` si tu cuenta lo requiere.
+
+Como referencia, una medición en una cuenta colombiana de producción (2026-11-22) mostró la
+factura en el listado 2,9 segundos después del POST. Es una sola muestra: la latencia puede
+variar con la carga de Alegra, así que el `verify_window` de 30 segundos por defecto deja margen.
+
 !!! warning "Crea un documento real"
     Este script crea una factura real en estado `draft` en tu cuenta de Alegra para medir el tiempo hasta que aparece en `reconcile`. Usa `--delete` para eliminarla al terminar (o bórrala manualmente usando el `id` impreso).
 
