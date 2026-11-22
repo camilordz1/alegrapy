@@ -18,6 +18,7 @@ Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones 
 | Usuarios | `client.users` | `users` | `self_info()` |
 | Numeraciones | `client.number_templates` | `number-templates` | `list(..., document_type=...)`, `iter_all(..., document_type=...)`, `default(document_type="invoice")` |
 | Empresa (singleton) | `client.company` | `company` | `get(fields=None)`, `update(params)` (sin `list`/`read`/`create`/`delete`) |
+| Notas débito de cliente | `client.income_debit_notes` | `income-debit-notes` | `void(id)` |
 
 Para los campos, filtros y reglas de cada recurso, consulta la [documentación oficial de la API de Alegra](https://developer.alegra.com/).
 
