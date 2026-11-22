@@ -188,13 +188,16 @@ class TestWebhooks(unittest.TestCase):
             item_evt.fetch(self.client)
             self.assertEqual(mock_req.call_args.kwargs["url"], "https://api.alegra.com/api/v1/items/30")
 
+            bill_evt = parse_webhook({"subject": "new-bill", "message": {"bill": {"id": "40"}}})
+            self.assertEqual(bill_evt.fetch(self.client), {"id": "10"})
+            self.assertEqual(mock_req.call_args.kwargs["url"], "https://api.alegra.com/api/v1/bills/40")
+
         with patch.object(self.client.session, "request") as mock_req:
             del_evt = parse_webhook({"subject": "delete-client", "message": {"client": {"id": "20", "name": ""}}})
             self.assertIsNone(del_evt.fetch(self.client))
 
-            bill_evt = parse_webhook({"subject": "new-bill", "message": {"bill": {"id": "40"}}})
-            with self.assertRaises(NotImplementedError):
-                bill_evt.fetch(self.client)
+            del_bill_evt = parse_webhook({"subject": "delete-bill", "message": {"bill": {"id": "40"}}})
+            self.assertIsNone(del_bill_evt.fetch(self.client))
             mock_req.assert_not_called()
 
 
