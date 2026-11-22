@@ -1,3 +1,5 @@
+import mimetypes
+import os
 from typing import Any, Dict, Iterable, Optional, Union
 
 COMPANY_FIELDS = frozenset({
@@ -84,3 +86,39 @@ class Company:
             raise ValueError("params must be a dict")
         endpoint = f"{self._client.url}{self.endpoint}"
         return self._client.query('put', endpoint, data=params)
+
+    def upload_logo(self, file_path: Union[str, os.PathLike]) -> Any:
+        """Upload the company logo (``POST /company/attachment``).
+
+        Reads the entire image file into memory (no persistent file handle is kept) and
+        sends it as ``multipart/form-data`` with ``type="logo"``. Multipart uploads are
+        not retried by ``RetryPolicy``.
+
+        Args:
+            file_path (str or os.PathLike): Path to an existing image file (``image/*``).
+
+        Returns:
+            Any: Parsed JSON response from the server (e.g. ``{"file": ..., "type": "logo"}``).
+
+        Raises:
+            FileNotFoundError: If ``file_path`` does not exist.
+            ValueError: If ``file_path`` is not a regular file or its MIME type is not ``image/*``.
+        """
+        path = os.fspath(file_path)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"File not found: {path}")
+        if not os.path.isfile(path):
+            raise ValueError(f"Path is not a regular file: {path}")
+        content_type, _ = mimetypes.guess_type(path)
+        if not content_type or not content_type.startswith("image/"):
+            raise ValueError(f"Logo file must be an image (got {content_type!r})")
+
+        with open(path, "rb") as f:
+            payload_bytes = f.read()
+
+        endpoint = f"{self._client.url}{self.endpoint}/attachment"
+        files = {
+            "file": (os.path.basename(path), payload_bytes, content_type),
+            "type": (None, "logo"),
+        }
+        return self._client.query('post', endpoint, files=files)
