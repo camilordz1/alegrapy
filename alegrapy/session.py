@@ -223,6 +223,22 @@ class AlegraClient:
             self._users = Users(self)
         return self._users
 
+    @property
+    def number_templates(self) -> 'NumberTemplates':
+        """Access NumberTemplates resource operations."""
+        if not hasattr(self, '_number_templates'):
+            from alegrapy.number_templates import NumberTemplates
+            self._number_templates = NumberTemplates(self)
+        return self._number_templates
+
+    @property
+    def company(self) -> 'Company':
+        """Access Company singleton resource operations."""
+        if not hasattr(self, '_company'):
+            from alegrapy.company import Company
+            self._company = Company(self)
+        return self._company
+
     def _credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """Resolve the (user, token) pair used to authenticate requests.
 
