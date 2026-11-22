@@ -60,6 +60,7 @@ nav:
       - Notas crédito y anulación: guias/notas-credito.md
       - Notas débito de cliente: guias/notas-debito.md
       - Emisión electrónica (DIAN): guias/emision-dian.md
+      - Webhooks: guias/webhooks.md
       - Numeraciones y empresa: guias/numeraciones-y-empresa.md
       - Archivos de facturas: guias/archivos-de-facturas.md
       - Errores: guias/errores.md
@@ -88,3 +89,4 @@ nav:
       - Numeraciones: referencia/number_templates.md
       - Empresa: referencia/company.md
       - Notas débito de cliente: referencia/income_debit_notes.md
+      - Webhooks: referencia/webhooks.md
