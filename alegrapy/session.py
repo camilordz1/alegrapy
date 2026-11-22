@@ -239,6 +239,14 @@ class AlegraClient:
             self._company = Company(self)
         return self._company
 
+    @property
+    def income_debit_notes(self) -> 'IncomeDebitNotes':
+        """Access IncomeDebitNotes resource operations."""
+        if not hasattr(self, '_income_debit_notes'):
+            from alegrapy.income_debit_notes import IncomeDebitNotes
+            self._income_debit_notes = IncomeDebitNotes(self)
+        return self._income_debit_notes
+
     def _credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """Resolve the (user, token) pair used to authenticate requests.
 
