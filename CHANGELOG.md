@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `client.company.upload_logo(file_path)` to upload an `image/*` company logo via `POST /company/attachment`.
+- `CreditNotes.reconcile(..., *, date=None)` optional keyword-only `date` parameter (`datetime.date` or strict `YYYY-MM-DD` string) to narrow the first lookup pass via the server `date` filter.
+
+### Changed
+
+- Credit-note dedup lookup (`CreditNotes.reconcile` and `Invoices.annul`) now sends `client_id` and, when a date is present (for `Invoices.annul`, the credit note's date, today by default), `date` as server filters (falling back to the scan without `date` if not found) while keeping the client-side `client_id` re-check.
 
 ## [0.4.0] - 2026-11-22
 
