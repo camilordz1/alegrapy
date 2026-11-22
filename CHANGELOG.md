@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `Invoices.annul()` sends each item tax as an `{"id": ...}` object in the annulment credit note. Alegra rejected the bare ids previously sent (HTTP 400 "Se debe enviar el parametro id para cada impuesto"), so `annul()` failed for every invoice with taxed items.
+
 ## [0.5.0] - 2026-11-22
 
 Compared against `0.4.0`. No breaking changes.
