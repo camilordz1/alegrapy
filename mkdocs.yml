@@ -62,6 +62,7 @@ nav:
       - Compras y proveedor: guias/compras.md
       - Emisión electrónica (DIAN): guias/emision-dian.md
       - Webhooks: guias/webhooks.md
+      - Catálogos y remisiones: guias/catalogos.md
       - Numeraciones y empresa: guias/numeraciones-y-empresa.md
       - Archivos de facturas: guias/archivos-de-facturas.md
       - Errores: guias/errores.md
@@ -93,3 +94,8 @@ nav:
       - Webhooks: referencia/webhooks.md
       - Facturas de proveedor: referencia/bills.md
       - Notas débito de proveedor: referencia/debit_notes.md
+      - Remisiones: referencia/remissions.md
+      - Bodegas: referencia/warehouses.md
+      - Listas de precios: referencia/price_lists.md
+      - Categorías de ítems: referencia/item_categories.md
+      - Términos de pago: referencia/terms.md

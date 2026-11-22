@@ -25,5 +25,10 @@ Esta sección se genera automáticamente a partir de los docstrings del código 
 | [Webhooks](webhooks.md) | `Webhooks`, `WebhookEvent`, `parse_webhook`, `AlegraWebhookError` |
 | [Facturas de proveedor](bills.md) | `Bills` |
 | [Notas débito de proveedor](debit_notes.md) | `DebitNotes` |
+| [Remisiones](remissions.md) | `Remissions` |
+| [Bodegas](warehouses.md) | `Warehouses` |
+| [Listas de precios](price_lists.md) | `PriceLists` |
+| [Categorías de ítems](item_categories.md) | `ItemCategories` |
+| [Términos de pago](terms.md) | `Terms` |
 
 Para los campos de cada recurso consulta la [documentación oficial de Alegra](https://developer.alegra.com/).
