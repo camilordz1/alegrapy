@@ -35,6 +35,13 @@ from alegrapy.users import Users, users
 from alegrapy.number_templates import NumberTemplates
 from alegrapy.company import Company
 from alegrapy.income_debit_notes import IncomeDebitNotes
+from alegrapy.webhooks import (
+    AlegraWebhookError,
+    WebhookEvent,
+    WebhookEventType,
+    Webhooks,
+    parse_webhook,
+)
 
 __all__ = [
     '__version__',
@@ -90,5 +97,10 @@ __all__ = [
     'NumberTemplates',
     'Company',
     'IncomeDebitNotes',
+    'Webhooks',
+    'WebhookEventType',
+    'WebhookEvent',
+    'parse_webhook',
+    'AlegraWebhookError',
 ]
 
