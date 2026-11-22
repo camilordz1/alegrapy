@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-22
+
+Compared against `0.3.1`.
+
 ### Fixed
 
 - `PurchaseOrders.add_comment()` raises `AlegraNotFoundError` (code 37009) or `AlegraAPIError` when Alegra answers HTTP 2xx with an error body, instead of returning that body as a result.
