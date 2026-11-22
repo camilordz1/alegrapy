@@ -161,6 +161,10 @@ class TestWebhooks(unittest.TestCase):
             {"subject": "new-invoice", "message": {"invoice": {}}},
             {"subject": "new-invoice", "message": {"invoice": {"id": "  "}}},
             {"subject": "new-invoice", "message": {"invoice": {"id": True}}},
+            # Webhooks are unauthenticated: ids that could alter a URL path are rejected
+            {"subject": "new-invoice", "message": {"invoice": {"id": "1/../users/self"}}},
+            {"subject": "new-invoice", "message": {"invoice": {"id": "1?x=2"}}},
+            {"subject": "new-invoice", "message": {"invoice": {"id": -5}}},
         ]
         for bad in bad_inputs:
             with self.subTest(bad=bad):

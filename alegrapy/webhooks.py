@@ -145,12 +145,13 @@ def parse_webhook(body: Union[bytes, str, Dict[str, Any]]) -> WebhookEvent:
     raw_id = data.get("id")
     if isinstance(raw_id, bool) or raw_id is None:
         raise AlegraWebhookError(f"Webhook {resource!r} object is missing 'id'")
-    if isinstance(raw_id, numbers.Integral):
-        resource_id = str(int(raw_id))
-    elif isinstance(raw_id, str) and raw_id.strip():
-        resource_id = raw_id.strip()
-    else:
-        raise AlegraWebhookError(f"Webhook {resource!r} object has an invalid 'id'")
+    if isinstance(raw_id, str):
+        raw_id = raw_id.strip()
+    # The payload is unauthenticated: only accept ids that cannot alter a URL path
+    try:
+        resource_id = str(validate_id(raw_id))
+    except ValueError as exc:
+        raise AlegraWebhookError(f"Webhook {resource!r} object has an invalid 'id'") from exc
 
     return WebhookEvent(
         type=event_type,
