@@ -22,6 +22,11 @@ Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones 
 | Webhooks | `client.webhooks` | `webhooks/subscriptions` | `list(page=None)`, `get(id)`, `create(event, url)`, `update(id, url)`, `delete(id)` (sin `iter_all`) |
 | Facturas de proveedor | `client.bills` | `bills` | `close(id, date, category, observations=None)`, `add_comment(id, comments)`, `delete_attachment(attachment_id)` |
 | Notas débito de proveedor | `client.debit_notes` | `debit-notes` | CRUD estándar (sin ordenamiento) |
+| Remisiones | `client.remissions` | `remissions` | `open(id)`, `void(id)`, `delete_attachment(attachment_id)` |
+| Bodegas | `client.warehouses` | `warehouses` | CRUD estándar |
+| Listas de precios | `client.price_lists` | `price-lists` | CRUD estándar |
+| Categorías de ítems | `client.item_categories` | `item-categories` | `delete_attachment(attachment_id)` |
+| Términos de pago | `client.terms` | `terms` | `list(fields=None)` (sin paginación) |
 
 Para los campos, filtros y reglas de cada recurso, consulta la [documentación oficial de la API de Alegra](https://developer.alegra.com/).
 

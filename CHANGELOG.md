@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `client.bills` (`Bills`): `list`, `iter_all`, `close`, `add_comment`, `delete_attachment`, and inherited `read`/`create`/`update`/`delete`/`add_attachment` on `/bills`.
 - `client.debit_notes` (`DebitNotes`): supplier debit notes on `/debit-notes` (`list`, `iter_all`, and CRUD).
+- `client.remissions` (`Remissions`): `/remissions` with `open`, `void`, `delete_attachment`, and CRUD.
+- `client.warehouses` (`Warehouses`): `/warehouses` with `list`, `iter_all`, and CRUD.
+- `client.price_lists` (`PriceLists`): `/price-lists` with `list`, `iter_all`, and validated `create`/`update`.
+- `client.item_categories` (`ItemCategories`): `/item-categories` with `delete_attachment`, `list`, `iter_all`, and CRUD.
+- `client.terms` (`Terms`): `/terms` with non-paginated `list(fields=None)`, single-call `iter_all`, and CRUD.
 
 ### Changed
 
