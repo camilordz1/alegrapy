@@ -1,5 +1,41 @@
+import json
 from typing import Any, Dict, List, Optional, Union
 from alegrapy.actions import Actions
+from alegrapy.exceptions import AlegraAPIError, AlegraNotFoundError
+
+_DOCUMENT_NOT_FOUND_CODE = 37009
+
+
+def _error_code(body: Dict[str, Any]) -> Optional[int]:
+    """Return the Alegra error code of ``body`` when it is an int or a digit string."""
+    code = body.get("code")
+    if isinstance(code, bool):
+        return None
+    if isinstance(code, int):
+        return code
+    if isinstance(code, str) and code.isascii() and code.isdigit():
+        return int(code)
+    return None
+
+
+def _raise_for_error_body(result: Any) -> None:
+    """Raise when a successful (2xx) response carries an Alegra error body.
+
+    A body counts as an error when it is a dict without ``id`` that has a ``message``
+    and a numeric ``code`` outside 200..299. Anything else is left alone.
+    ``status_code`` is ``None`` because ``AlegraClient.query()`` does not expose the
+    HTTP status of successful responses.
+    """
+    if not isinstance(result, dict) or "id" in result or "message" not in result:
+        return
+    code = _error_code(result)
+    if code is None or 200 <= code <= 299:
+        return
+    message = str(result["message"])
+    body = json.dumps(result, ensure_ascii=False)
+    if code == _DOCUMENT_NOT_FOUND_CODE:
+        raise AlegraNotFoundError(message, status_code=None, response_body=body)
+    raise AlegraAPIError(message, status_code=None, response_body=body)
 
 
 class PurchaseOrders(Actions):
@@ -66,7 +102,9 @@ class PurchaseOrders(Actions):
             This endpoint is not documented by Alegra; its existence was verified on
             2026-11-21. It may change without notice.
             Alegra was observed answering a missing purchase order with HTTP 200 and
-            an error body (``{"code": 37009, ...}``), so check the response.
+            an error body (``{"code": 37009, ...}``); that case is raised as an error
+            (see ``Raises``). Its ``status_code`` is ``None`` because the 2xx status is
+            not exposed by the client.
 
         Args:
             id (int or str): Purchase order ID.
@@ -77,10 +115,15 @@ class PurchaseOrders(Actions):
 
         Raises:
             ValueError: If the ID is not a valid resource identifier.
+            AlegraNotFoundError: If Alegra answers 2xx with an error body whose code is
+                37009 (the purchase order does not exist).
+            AlegraAPIError: If Alegra answers 2xx with any other error body.
         """
         endpoint = self._resource_url(id, "comments")
         data = {"comments": comment_text}
-        return self.client.query('post', endpoint, data=data)
+        result = self.client.query('post', endpoint, data=data)
+        _raise_for_error_body(result)
+        return result
 
 
 # For backward compatibility
