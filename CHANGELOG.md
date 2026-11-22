@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `client.number_templates` (`NumberTemplates`): `list(document_type=...)`, `iter_all(document_type=...)`, `default(document_type="invoice")`, and standard `read`/`create`/`update`/`delete` on `/number-templates`.
+- `client.company` (`Company`): singleton `get(fields=None)` and `update(params)` on `/company`.
+
 ## [0.3.2] - 2026-11-22
 
 Compared against `0.3.1`.
