@@ -120,4 +120,4 @@ El aviso señala la línea de tu código que usa la API legacy, así que úsalo 
 
 `estimates.void`, `estimates.open`, `purchase_orders.send_email` y `purchase_orders.add_comment` **no están deprecados**. La deprecación anunciada en `0.3.0` se revirtió en `0.3.1`: estos métodos ya no emiten `FutureWarning`.
 
-Usan rutas que Alegra no documenta (`developer.alegra.com`). Su existencia se verificó el 2026-11-21, pero pueden cambiar sin previo aviso. En particular, para una orden de compra inexistente, `purchase_orders.add_comment` recibió una respuesta HTTP 200 con un cuerpo de error (`{"code": 37009, ...}`), así que conviene revisar la respuesta.
+Usan rutas que Alegra no documenta (`developer.alegra.com`). Su existencia se verificó el 2026-11-21, pero pueden cambiar sin previo aviso. En particular, para una orden de compra inexistente, `purchase_orders.add_comment` recibió una respuesta HTTP 200 con un cuerpo de error (`{"code": 37009, ...}`), por lo que `add_comment` ahora lanza `AlegraNotFoundError` (código 37009) o `AlegraAPIError` cuando Alegra responde 2xx con un cuerpo de error; en ese caso `status_code` es `None`.
