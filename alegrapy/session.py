@@ -255,6 +255,22 @@ class AlegraClient:
             self._webhooks = Webhooks(self)
         return self._webhooks
 
+    @property
+    def bills(self) -> 'Bills':
+        """Access Bills (supplier bills) resource operations."""
+        if not hasattr(self, '_bills'):
+            from alegrapy.bills import Bills
+            self._bills = Bills(self)
+        return self._bills
+
+    @property
+    def debit_notes(self) -> 'DebitNotes':
+        """Access DebitNotes (supplier debit notes) resource operations."""
+        if not hasattr(self, '_debit_notes'):
+            from alegrapy.debit_notes import DebitNotes
+            self._debit_notes = DebitNotes(self)
+        return self._debit_notes
+
     def _credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """Resolve the (user, token) pair used to authenticate requests.
 
