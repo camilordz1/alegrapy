@@ -54,6 +54,17 @@ Para actualizar la configuración de la empresa:
 client.company.update({"decimalPrecision": 2})
 ```
 
+### Logo de la empresa
+
+Puedes subir el logo con `upload_logo(file_path)` (envía `POST /company/attachment` en `multipart/form-data` con `type="logo"`):
+
+```python
+resp = client.company.upload_logo("ruta/al/logo.png")
+print(resp["file"])
+```
+
+Solo se aceptan archivos regulares cuyo tipo MIME sea `image/*`. La subida no se reintenta automáticamente ante fallos de red.
+
 ## Vendedores (`sellers`)
 
 La API REST de `api.alegra.com` no expone un endpoint `/sellers` (Alegra documenta los vendedores únicamente como herramienta MCP con autenticación OAuth Bearer, incompatible con las credenciales Basic del SDK), por lo que AlegraPy no incluye un recurso `sellers`.
