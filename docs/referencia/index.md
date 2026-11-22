@@ -23,5 +23,7 @@ Esta sección se genera automáticamente a partir de los docstrings del código 
 | [Empresa](company.md) | `Company` |
 | [Notas débito de cliente](income_debit_notes.md) | `IncomeDebitNotes` |
 | [Webhooks](webhooks.md) | `Webhooks`, `WebhookEvent`, `parse_webhook`, `AlegraWebhookError` |
+| [Facturas de proveedor](bills.md) | `Bills` |
+| [Notas débito de proveedor](debit_notes.md) | `DebitNotes` |
 
 Para los campos de cada recurso consulta la [documentación oficial de Alegra](https://developer.alegra.com/).

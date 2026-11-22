@@ -13,6 +13,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `client.bills` (`Bills`): `list`, `iter_all`, `close`, `add_comment`, `delete_attachment`, and inherited `read`/`create`/`update`/`delete`/`add_attachment` on `/bills`.
+- `client.debit_notes` (`DebitNotes`): supplier debit notes on `/debit-notes` (`list`, `iter_all`, and CRUD).
+
+### Changed
+
+- `WebhookEvent.fetch(client)` now resolves `*-bill` events via `client.bills.read(resource_id)`.
+
 ## [0.6.0] - 2026-11-22
 
 Compared against `0.5.1`. No breaking changes.

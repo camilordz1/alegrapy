@@ -59,6 +59,7 @@ nav:
       - Facturas sin duplicados: guias/facturas-sin-duplicados.md
       - Notas crédito y anulación: guias/notas-credito.md
       - Notas débito de cliente: guias/notas-debito.md
+      - Compras y proveedor: guias/compras.md
       - Emisión electrónica (DIAN): guias/emision-dian.md
       - Webhooks: guias/webhooks.md
       - Numeraciones y empresa: guias/numeraciones-y-empresa.md
@@ -90,3 +91,5 @@ nav:
       - Empresa: referencia/company.md
       - Notas débito de cliente: referencia/income_debit_notes.md
       - Webhooks: referencia/webhooks.md
+      - Facturas de proveedor: referencia/bills.md
+      - Notas débito de proveedor: referencia/debit_notes.md

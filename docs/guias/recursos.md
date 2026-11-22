@@ -20,6 +20,8 @@ Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones 
 | Empresa (singleton) | `client.company` | `company` | `get(fields=None)`, `update(params)` (sin `list`/`read`/`create`/`delete`) |
 | Notas débito de cliente | `client.income_debit_notes` | `income-debit-notes` | `void(id)` |
 | Webhooks | `client.webhooks` | `webhooks/subscriptions` | `list(page=None)`, `get(id)`, `create(event, url)`, `update(id, url)`, `delete(id)` (sin `iter_all`) |
+| Facturas de proveedor | `client.bills` | `bills` | `close(id, date, category, observations=None)`, `add_comment(id, comments)`, `delete_attachment(attachment_id)` |
+| Notas débito de proveedor | `client.debit_notes` | `debit-notes` | CRUD estándar (sin ordenamiento) |
 
 Para los campos, filtros y reglas de cada recurso, consulta la [documentación oficial de la API de Alegra](https://developer.alegra.com/).
 

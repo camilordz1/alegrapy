@@ -37,7 +37,7 @@ client.webhooks.update(sub["id"], sub["url"])
 Sigue estas cuatro reglas en tu receptor:
 
 1. **Token secreto en la ruta de la URL**: genera un token aleatorio largo en la URL registrada y compáralo en tiempo constante (`hmac.compare_digest`) antes de procesar el cuerpo.
-2. **Nunca confíes ciegamente en el payload**: usa `event.fetch(client)` para releer el recurso desde la API de Alegra (en eventos `delete-*` devuelve `None`; en `bill` lanza `NotImplementedError` hasta que exista ese recurso).
+2. **Nunca confíes ciegamente en el payload**: usa `event.fetch(client)` para releer el recurso desde la API de Alegra (en eventos `delete-*` devuelve `None`; soporta `invoice`, `client`, `item` y `bill`).
 3. **Deduplica por `(event.type, event.resource_id)`**: Alegra puede repetir entregas o enviarlas fuera de orden.
 4. **Responde `2xx` rápido (< 10 s)** y encola el trabajo en segundo plano.
 
