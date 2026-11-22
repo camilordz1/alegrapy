@@ -32,6 +32,8 @@ from alegrapy.taxes import Taxes, taxes
 from alegrapy.currencies import Currencies, currencies
 from alegrapy.retentions import Retentions, retentions
 from alegrapy.users import Users, users
+from alegrapy.number_templates import NumberTemplates
+from alegrapy.company import Company
 
 __all__ = [
     '__version__',
@@ -84,5 +86,7 @@ __all__ = [
     'retentions',
     'Users',
     'users',
+    'NumberTemplates',
+    'Company',
 ]
 
