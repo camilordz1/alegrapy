@@ -271,6 +271,46 @@ class AlegraClient:
             self._debit_notes = DebitNotes(self)
         return self._debit_notes
 
+    @property
+    def remissions(self) -> 'Remissions':
+        """Access Remissions resource operations."""
+        if not hasattr(self, '_remissions'):
+            from alegrapy.remissions import Remissions
+            self._remissions = Remissions(self)
+        return self._remissions
+
+    @property
+    def warehouses(self) -> 'Warehouses':
+        """Access Warehouses resource operations."""
+        if not hasattr(self, '_warehouses'):
+            from alegrapy.warehouses import Warehouses
+            self._warehouses = Warehouses(self)
+        return self._warehouses
+
+    @property
+    def price_lists(self) -> 'PriceLists':
+        """Access PriceLists resource operations."""
+        if not hasattr(self, '_price_lists'):
+            from alegrapy.price_lists import PriceLists
+            self._price_lists = PriceLists(self)
+        return self._price_lists
+
+    @property
+    def item_categories(self) -> 'ItemCategories':
+        """Access ItemCategories resource operations."""
+        if not hasattr(self, '_item_categories'):
+            from alegrapy.item_categories import ItemCategories
+            self._item_categories = ItemCategories(self)
+        return self._item_categories
+
+    @property
+    def terms(self) -> 'Terms':
+        """Access Terms resource operations."""
+        if not hasattr(self, '_terms'):
+            from alegrapy.terms import Terms
+            self._terms = Terms(self)
+        return self._terms
+
     def _credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """Resolve the (user, token) pair used to authenticate requests.
 
