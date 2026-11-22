@@ -58,6 +58,7 @@ nav:
       - Búsquedas exactas: guias/busquedas.md
       - Facturas sin duplicados: guias/facturas-sin-duplicados.md
       - Notas crédito y anulación: guias/notas-credito.md
+      - Notas débito de cliente: guias/notas-debito.md
       - Emisión electrónica (DIAN): guias/emision-dian.md
       - Numeraciones y empresa: guias/numeraciones-y-empresa.md
       - Archivos de facturas: guias/archivos-de-facturas.md
@@ -86,3 +87,4 @@ nav:
       - Usuarios: referencia/users.md
       - Numeraciones: referencia/number_templates.md
       - Empresa: referencia/company.md
+      - Notas débito de cliente: referencia/income_debit_notes.md

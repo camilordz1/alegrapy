@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `client.company.upload_logo(file_path)` to upload an `image/*` company logo via `POST /company/attachment`.
 - `CreditNotes.reconcile(..., *, date=None)` optional keyword-only `date` parameter (`datetime.date` or strict `YYYY-MM-DD` string) to narrow the first lookup pass via the server `date` filter.
+- `client.income_debit_notes` (`IncomeDebitNotes`): `list`, `iter_all`, `void`, and standard `read`/`create`/`update`/`delete` on `/income-debit-notes`.
+- Maintainer probe `scripts/probe_debit_note_marker.py` (not shipped in wheel/sdist) to test `observations` marker persistence and pagination on `/income-debit-notes`.
 
 ### Changed
 

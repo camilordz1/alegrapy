@@ -21,5 +21,6 @@ Esta sección se genera automáticamente a partir de los docstrings del código 
 | [Usuarios](users.md) | `Users` |
 | [Numeraciones](number_templates.md) | `NumberTemplates` |
 | [Empresa](company.md) | `Company` |
+| [Notas débito de cliente](income_debit_notes.md) | `IncomeDebitNotes` |
 
 Para los campos de cada recurso consulta la [documentación oficial de Alegra](https://developer.alegra.com/).
