@@ -27,6 +27,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--client-id", required=True, help="Client ID for the draft invoice.")
     parser.add_argument("--item-id", required=True, help="Item ID for the draft invoice line.")
     parser.add_argument("--delete", action="store_true", help="Delete the draft invoice after measuring.")
+    parser.add_argument(
+        "--payment-form",
+        choices=("CASH", "CREDIT"),
+        default="CASH",
+        help="Invoice payment form; Alegra requires it for Colombian invoices (default CASH).",
+    )
     return parser
 
 
@@ -48,6 +54,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "date": today,
         "dueDate": today,
         "status": "draft",
+        "paymentForm": args.payment_form,
         "client": {"id": args.client_id},
         "items": [{"id": args.item_id, "quantity": 1, "price": 1000}],
     }

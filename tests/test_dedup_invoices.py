@@ -602,6 +602,32 @@ class TestInvoiceDedupDateFilter(unittest.TestCase):
             mock_req.assert_not_called()
             mock_sess.assert_not_called()
 
+    def test_latency_script_sends_payment_form(self):
+        import pathlib
+
+        script_path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "measure_list_latency.py"
+        spec = importlib.util.spec_from_file_location("measure_list_latency", script_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        parser = module._build_parser()
+        base = ["--yes-call-live-api", "--client-id", "126", "--item-id", "1"]
+        self.assertEqual(parser.parse_args(base).payment_form, "CASH")
+        self.assertEqual(parser.parse_args(base + ["--payment-form", "CREDIT"]).payment_form, "CREDIT")
+        with self.assertRaises(SystemExit):
+            parser.parse_args(base + ["--payment-form", "cash"])
+
+        created = {"id": "9", "observations": "", "client": {"id": "126"}}
+        found = dict(created)
+        with patch.dict("os.environ", {"ALEGRA_USER": "u", "ALEGRA_TOKEN": "t"}), \
+                patch.object(module, "AlegraClient") as client_cls:
+            client = client_cls.return_value.__enter__.return_value
+            client.invoices.create_once.return_value = created
+            client.invoices.reconcile.return_value = found
+            self.assertEqual(module.main(base), 0)
+        payload = client.invoices.create_once.call_args.args[0]
+        self.assertEqual(payload["paymentForm"], "CASH")
+
 
 if __name__ == '__main__':
     unittest.main()
