@@ -73,8 +73,7 @@ class WebhookEvent:
     def fetch(self, client: 'AlegraClient') -> Optional[Any]:
         """Re-read the referenced resource from Alegra before trusting the payload.
 
-        Returns ``None`` without making a request for ``delete-*`` events. Raises
-        ``NotImplementedError`` for ``bill`` events (no bills resource exists in the SDK).
+        Returns ``None`` without making a request for ``delete-*`` events.
         """
         if self.action == "delete":
             return None
@@ -85,7 +84,7 @@ class WebhookEvent:
         if self.resource == "item":
             return client.items.read(self.resource_id)
         if self.resource == "bill":
-            raise NotImplementedError("Bills resource is not implemented in AlegraPy yet")
+            return client.bills.read(self.resource_id)
         raise AlegraWebhookError(f"Unsupported webhook resource {self.resource!r}")
 
 
