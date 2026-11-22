@@ -183,7 +183,8 @@ class TestCreditNotes(unittest.TestCase):
 
     def test_annul_verifies_ambiguous_post(self):
         existing = {"id": 902, "observations": MARKER, "stamp": STAMPED}
-        self.note_pages = [[], [existing]]
+        # Precheck misses on both passes (date, fallback); verification finds it
+        self.note_pages = [[], [], [existing]]
         self.posts = [alegrapy.AlegraServerError("boom", status_code=503)]
 
         with patch.object(_FLOW_TIME, 'monotonic', return_value=0.0):
@@ -283,7 +284,8 @@ class TestCreditNotes(unittest.TestCase):
         self.assertEqual(ctx.exception.document, created)
         self.assertIs(ctx.exception.__cause__, error)
         self.assertEqual(len(self._post_calls()), 1)
-        self.assertEqual(len(self._note_gets()), 1)
+        # One precheck lookup: the date pass plus the fallback pass
+        self.assertEqual(len(self._note_gets()), 2)
 
     def test_plain_400_is_raised_unchanged(self):
         error = alegrapy.AlegraValidationError(
@@ -437,7 +439,7 @@ class TestCreditNotes(unittest.TestCase):
         with patch.object(alegrapy.CreditNotes, 'reconcile', return_value=None) as reconcile:
             self.client.invoices.annul(11742, "motivo", lookup_pages=4)
 
-        reconcile.assert_any_call("annul:11742", 126, lookup_pages=4)
+        reconcile.assert_any_call("annul:11742", 126, lookup_pages=4, date=date.today().isoformat())
 
     def test_annul_stamp_false_and_number_template(self):
         self.note_pages = [[]]
@@ -499,6 +501,22 @@ class TestCreditNotes(unittest.TestCase):
 
         payload = self._post_calls()[0][2]['data']
         self.assertEqual(payload['date'], "2026-01-02")
+
+    def test_annul_without_date_looks_up_the_payload_date(self):
+        class _FixedDate:
+            @staticmethod
+            def today():
+                return date(2026, 1, 2)
+
+        self.note_pages = [[], []]
+        self.posts = [{"id": 911}]
+
+        with patch.object(_INVOICES_MODULE, 'date', _FixedDate):
+            self.client.invoices.annul(11742, "motivo")
+
+        first_lookup = self._note_gets()[0][2]['params']
+        self.assertEqual(first_lookup['date'], "2026-01-02")
+        self.assertEqual(self._post_calls()[0][2]['data']['date'], "2026-01-02")
 
     def test_annul_accepts_an_explicit_date(self):
         for given, expected in ((date(2026, 11, 19), "2026-11-19"), (" 2026-11-19 ", "2026-11-19")):
@@ -648,6 +666,7 @@ class TestCreditNotesLookupFilters(unittest.TestCase):
         self.assertEqual(cn_get["url"], "https://api.alegra.com/api/v1/credit-notes")
         self.assertEqual(cn_get["params"]["date"], "2026-11-22")
         self.assertEqual(cn_get["params"]["client_id"], 126)
+
 
 
 if __name__ == '__main__':

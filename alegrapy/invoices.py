@@ -69,6 +69,11 @@ def _enum_value(value: Any) -> Any:
     return value.value if isinstance(value, enum.Enum) else value
 
 
+def _today_iso() -> str:
+    """Today's date as ``YYYY-MM-DD`` (module-level ``date`` so tests can patch it)."""
+    return date.today().isoformat()
+
+
 def _credit_note_date(value: Any) -> Optional[str]:
     """Validate an explicit credit-note date; ``None`` means "today" (resolved later).
 
@@ -384,15 +389,13 @@ class Invoices(Actions):
             key = validate_dedup_key(dedup_key)
 
         credit_notes = self.client.credit_notes
-        lookup_date = note_date
+        # Resolve "today" once so the payload and every lookup use the same date
+        note_date = note_date or _today_iso()
 
         def lookup() -> Optional[Dict[str, Any]]:
-            if lookup_date is not None:
-                note = credit_notes.reconcile(
-                    key, client_id, lookup_pages=lookup_pages, date=lookup_date
-                )
-            else:
-                note = credit_notes.reconcile(key, client_id, lookup_pages=lookup_pages)
+            note = credit_notes.reconcile(
+                key, client_id, lookup_pages=lookup_pages, date=note_date
+            )
             if note is not None and stamp and not _note_is_stamped(note):
                 # A previous attempt created the note but stamping failed: the
                 # annulment is not complete, so report it instead of returning it
