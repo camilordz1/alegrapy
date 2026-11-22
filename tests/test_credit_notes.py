@@ -533,5 +533,122 @@ class TestCreditNotes(unittest.TestCase):
         self.assertNotIn('data', post[2])
 
 
+class TestCreditNotesLookupFilters(unittest.TestCase):
+
+    def setUp(self):
+        self.client = AlegraClient(
+            user="user",
+            token="token",
+            retry=alegrapy.RetryPolicy(max_retries=0),
+        )
+
+    @staticmethod
+    def _mock_response(payload, status=200):
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.status_code = status
+        resp.text = json.dumps(payload)
+        resp.json.return_value = payload
+        resp.headers = {}
+        return resp
+
+    def test_reconcile_with_client_id_sends_filter_and_keeps_client_side_recheck(self):
+        wrong_client = {"id": 1, "observations": MARKER, "client": {"id": 999}}
+        right_client = {"id": 2, "observations": MARKER, "client": {"id": 126}}
+        with patch.object(
+            self.client.session,
+            "request",
+            return_value=self._mock_response([wrong_client, right_client]),
+        ) as mock_req:
+            result = self.client.credit_notes.reconcile("annul:11742", client_id=126)
+
+        self.assertEqual(result, right_client)
+        self.assertEqual(mock_req.call_count, 1)
+        kw = mock_req.call_args.kwargs
+        self.assertEqual(kw["method"].lower(), "get")
+        self.assertEqual(kw["url"], "https://api.alegra.com/api/v1/credit-notes")
+        self.assertEqual(kw["params"]["client_id"], 126)
+
+    def test_reconcile_with_date_stops_when_found_and_falls_back_when_missing(self):
+        note = {"id": 10, "observations": MARKER, "client": {"id": 126}}
+        with patch.object(
+            self.client.session, "request", return_value=self._mock_response([note])
+        ) as mock_req:
+            res = self.client.credit_notes.reconcile("annul:11742", 126, date="2026-11-22")
+
+        self.assertEqual(res, note)
+        self.assertEqual(mock_req.call_count, 1)
+        self.assertEqual(mock_req.call_args.kwargs["params"]["date"], "2026-11-22")
+        self.assertEqual(mock_req.call_args.kwargs["params"]["client_id"], 126)
+
+        full_page = [{"id": i, "observations": None} for i in range(30)]
+        with patch.object(
+            self.client.session,
+            "request",
+            side_effect=[
+                self._mock_response(full_page),
+                self._mock_response([]),
+                self._mock_response(full_page),
+                self._mock_response([note]),
+            ],
+        ) as mock_req:
+            res2 = self.client.credit_notes.reconcile(
+                "annul:11742", 126, lookup_pages=2, date=date(2026, 11, 22)
+            )
+
+        self.assertEqual(res2, note)
+        self.assertEqual(mock_req.call_count, 4)
+        self.assertEqual(mock_req.call_args_list[0].kwargs["params"]["date"], "2026-11-22")
+        self.assertEqual(mock_req.call_args_list[1].kwargs["params"]["date"], "2026-11-22")
+        self.assertNotIn("date", mock_req.call_args_list[2].kwargs["params"])
+        self.assertNotIn("date", mock_req.call_args_list[3].kwargs["params"])
+
+    def test_reconcile_invalid_date_raises_before_request(self):
+        import datetime as dt
+
+        for bad in ("2026-13-01", "21/11/2026", dt.datetime(2026, 11, 22, 10, 0), True, 123):
+            with self.subTest(bad=bad):
+                with patch.object(self.client.session, "request") as mock_req:
+                    with self.assertRaises(ValueError):
+                        self.client.credit_notes.reconcile("annul:11742", 126, date=bad)
+                    mock_req.assert_not_called()
+
+    def test_reconcile_without_date_and_client_matches_040_sequence(self):
+        with patch.object(
+            self.client.session, "request", return_value=self._mock_response([])
+        ) as mock_req:
+            res = self.client.credit_notes.reconcile("annul:11742", lookup_pages=1)
+
+        self.assertIsNone(res)
+        self.assertEqual(
+            mock_req.call_args.kwargs["params"],
+            {
+                "order_field": "id",
+                "order_direction": "DESC",
+                "start": 0,
+                "limit": 30,
+            },
+        )
+
+    def test_annul_passes_payload_date_to_credit_notes_lookup(self):
+        stamped_note = {"id": 50, "observations": MARKER, "stamp": STAMPED, "client": {"id": 126}}
+        with patch.object(
+            self.client.session,
+            "request",
+            side_effect=[
+                self._mock_response(copy.deepcopy(INVOICE)),
+                self._mock_response([stamped_note]),
+            ],
+        ) as mock_req:
+            result = self.client.invoices.annul(11742, "motivo", date="2026-11-22")
+
+        self.assertEqual(result, stamped_note)
+        cn_get = mock_req.call_args_list[1].kwargs
+        self.assertEqual(cn_get["url"], "https://api.alegra.com/api/v1/credit-notes")
+        self.assertEqual(cn_get["params"]["date"], "2026-11-22")
+        self.assertEqual(cn_get["params"]["client_id"], 126)
+
+
 if __name__ == '__main__':
     unittest.main()
