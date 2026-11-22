@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `client.webhooks` (`Webhooks`): `list(page=None)`, `get(id)`, `create(event, url)`, `update(id, url)`, and `delete(id)` on `/webhooks/subscriptions`.
+- Typed webhook event parser: `WebhookEventType`, `WebhookEvent` (with `fetch(client)`), `parse_webhook(body)`, and `AlegraWebhookError`.
+
 ## [0.5.1] - 2026-11-22
 
 Compared against `0.5.0`.
