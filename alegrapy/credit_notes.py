@@ -2,7 +2,7 @@ import enum
 from typing import Any, Dict, Optional, Union
 
 from alegrapy._create_once import (contains_marker, marker_for, validate_dedup_key,
-                                 validate_lookup_pages)
+                                 validate_lookup_date, validate_lookup_pages)
 from alegrapy.actions import Actions, validate_id
 
 
@@ -51,40 +51,56 @@ class CreditNotes(Actions):
         super().__init__(client)
 
     def reconcile(self, dedup_key: str, client_id: Union[int, str, None] = None,
-                  lookup_pages: int = 2) -> Optional[Dict[str, Any]]:
+                  lookup_pages: int = 2, *, date: Any = None) -> Optional[Dict[str, Any]]:
         """Return the newest credit note carrying ``dedup_key``, or ``None``.
 
-        The ``GET /credit-notes`` reference (reviewed 2026-11-19) does not document a
-        ``client_id`` filter, so this scans the newest ``lookup_pages * 30`` notes by
-        ``id`` (DESC) without a status filter and matches the marker client-side. When
-        ``client_id`` is given, notes from other clients are ignored.
+        ``GET /credit-notes`` (reviewed 2026-11-22) documents ``client_id`` and exact
+        ``date`` (``YYYY-MM-DD``) filters. When ``client_id`` is given, it is sent as a
+        server filter and also re-checked client-side. When ``date`` is given, the
+        lookup first scans up to ``lookup_pages * 30`` notes for that day, and falls
+        back to an unfiltered-by-date scan of ``lookup_pages * 30`` notes if not found.
 
         Args:
             dedup_key (str): Key used in the note's ``observations`` marker.
             client_id (int or str, optional): Restrict matches to this client.
-            lookup_pages (int): Number of 30-record pages to scan (default 2).
+            lookup_pages (int): Number of 30-record pages to scan per pass (default 2).
+            date (datetime.date or str, optional): Credit-note date (``YYYY-MM-DD``) to
+                narrow the first lookup pass via the server ``date`` filter.
 
         Returns:
             dict, optional: The matching credit note, or ``None``.
 
         Raises:
-            ValueError: If the key, client id or ``lookup_pages`` are invalid.
+            ValueError: If the key, client id, ``lookup_pages`` or ``date`` are invalid.
         """
         key = validate_dedup_key(dedup_key)
         pages = validate_lookup_pages(lookup_pages)
+        lookup_date = validate_lookup_date(date)
         marker = marker_for(key)
-        expected_client = str(validate_id(client_id)) if client_id is not None else None
+        valid_client_id = validate_id(client_id) if client_id is not None else None
+        expected_client = str(valid_client_id) if valid_client_id is not None else None
 
-        for note in self.iter_all(max_items=pages * 30,
-                                  order_field="id", order_direction="DESC"):
-            if not contains_marker(note, marker):
-                continue
-            record_client = _record_client_id(note)
-            if (expected_client is not None and record_client is not None
-                    and record_client != expected_client):
-                continue
-            return note
-        return None
+        base_filters: Dict[str, Any] = {"order_field": "id", "order_direction": "DESC"}
+        if valid_client_id is not None:
+            base_filters["client_id"] = valid_client_id
+
+        def _scan(extra_filters: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            for note in self.iter_all(max_items=pages * 30, **extra_filters):
+                if not contains_marker(note, marker):
+                    continue
+                record_client = _record_client_id(note)
+                if (expected_client is not None and record_client is not None
+                        and record_client != expected_client):
+                    continue
+                return note
+            return None
+
+        if lookup_date is not None:
+            found = _scan({**base_filters, "date": lookup_date})
+            if found is not None:
+                return found
+
+        return _scan(base_filters)
 
 
 # For backward compatibility

@@ -384,9 +384,15 @@ class Invoices(Actions):
             key = validate_dedup_key(dedup_key)
 
         credit_notes = self.client.credit_notes
+        lookup_date = note_date
 
         def lookup() -> Optional[Dict[str, Any]]:
-            note = credit_notes.reconcile(key, client_id, lookup_pages=lookup_pages)
+            if lookup_date is not None:
+                note = credit_notes.reconcile(
+                    key, client_id, lookup_pages=lookup_pages, date=lookup_date
+                )
+            else:
+                note = credit_notes.reconcile(key, client_id, lookup_pages=lookup_pages)
             if note is not None and stamp and not _note_is_stamped(note):
                 # A previous attempt created the note but stamping failed: the
                 # annulment is not complete, so report it instead of returning it
