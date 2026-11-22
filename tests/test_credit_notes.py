@@ -124,9 +124,10 @@ class TestCreditNotes(unittest.TestCase):
         self.assertEqual(
             payload['items'],
             [
-                {"id": 11, "price": 10000.2, "quantity": 2, "tax": [1],
+                # Alegra rejects bare ids: "Se debe enviar el parametro id para cada impuesto"
+                {"id": 11, "price": 10000.2, "quantity": 2, "tax": [{"id": 1}],
                  "reference": "A", "description": "Item A"},
-                {"id": 12, "price": 1008, "quantity": 1, "tax": [2], "reference": "B"},
+                {"id": 12, "price": 1008, "quantity": 1, "tax": [{"id": 2}], "reference": "B"},
             ],
         )
         self.assertIn(MARKER, payload['observations'].splitlines())
