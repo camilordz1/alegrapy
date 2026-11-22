@@ -42,6 +42,8 @@ from alegrapy.webhooks import (
     Webhooks,
     parse_webhook,
 )
+from alegrapy.bills import Bills
+from alegrapy.debit_notes import DebitNotes
 
 __all__ = [
     '__version__',
@@ -102,5 +104,7 @@ __all__ = [
     'WebhookEvent',
     'parse_webhook',
     'AlegraWebhookError',
+    'Bills',
+    'DebitNotes',
 ]
 
