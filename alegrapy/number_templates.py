@@ -62,6 +62,8 @@ class NumberTemplates(Actions):
         Raises:
             ValueError: If ``document_type``, ``start``, or ``limit`` are invalid.
         """
+        if "documentType" in kwargs:
+            raise ValueError("pass the document type as document_type, not documentType")
         valid_type = _validate_document_type(document_type)
         valid_start, valid_limit = _validate_pagination(start, limit)
         endpoint = self._collection_url()

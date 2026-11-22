@@ -80,6 +80,14 @@ class TestNumberTemplates(unittest.TestCase):
                         self.client.number_templates.list(**bad_kwargs)
             mock_req.assert_not_called()
 
+    def test_list_rejects_kwargs_that_override_validated_params(self):
+        for key in ("documentType", "start", "limit"):
+            with self.subTest(key=key):
+                with patch.object(self.client.session, "request") as mock_req:
+                    with self.assertRaises(ValueError):
+                        self.client.number_templates.list(document_type="invoice", **{key: "x"})
+                    mock_req.assert_not_called()
+
     def test_iter_all_paginates_and_stops(self):
         page1 = [{"id": str(i)} for i in range(30)]
         page2 = [{"id": "30"}]
