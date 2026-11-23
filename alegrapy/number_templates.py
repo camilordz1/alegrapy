@@ -1,6 +1,6 @@
-import numbers
 from typing import Any, Dict, Iterator, List, Optional
 
+from alegrapy._listing import build_list_params, validate_choice
 from alegrapy.actions import Actions
 
 DOCUMENT_TYPES = frozenset({
@@ -12,21 +12,6 @@ DOCUMENT_TYPES = frozenset({
     "debitNote",
     "incomeDebitNote",
 })
-
-
-def _validate_document_type(document_type: Any) -> str:
-    if not isinstance(document_type, str) or document_type not in DOCUMENT_TYPES:
-        allowed = ", ".join(sorted(DOCUMENT_TYPES))
-        raise ValueError(f"document_type must be one of: {allowed}")
-    return document_type
-
-
-def _validate_pagination(start: Any, limit: Any) -> tuple[int, int]:
-    if isinstance(start, bool) or not isinstance(start, numbers.Integral) or start < 0:
-        raise ValueError("start must be a non-negative integer")
-    if isinstance(limit, bool) or not isinstance(limit, numbers.Integral) or not 1 <= limit <= 30:
-        raise ValueError("limit must be an integer between 1 and 30")
-    return int(start), int(limit)
 
 
 class NumberTemplates(Actions):
@@ -46,8 +31,9 @@ class NumberTemplates(Actions):
         """List number templates for a required ``document_type``.
 
         Unlike :meth:`Actions.list`, ``GET /number-templates`` does not document
-        ``order_field`` or ``order_direction`` and requires ``documentType``, so only
-        ``start``, ``limit``, ``documentType``, and caller ``kwargs`` are sent.
+        ``order_field`` or ``order_direction`` (passing them raises ``ValueError``)
+        and requires ``documentType``, so only ``start``, ``limit``, ``documentType``,
+        and caller ``kwargs`` are sent.
 
         Args:
             start (int): Initial position index for pagination (default 0).
@@ -60,20 +46,21 @@ class NumberTemplates(Actions):
             List[Any]: Matching number templates.
 
         Raises:
-            ValueError: If ``document_type``, ``start``, or ``limit`` are invalid.
+            ValueError: If ``document_type``, ``start``, ``limit``, or ordering
+                parameters are invalid.
         """
         if "documentType" in kwargs:
             raise ValueError("pass the document type as document_type, not documentType")
-        valid_type = _validate_document_type(document_type)
-        valid_start, valid_limit = _validate_pagination(start, limit)
-        endpoint = self._collection_url()
-        params: Dict[str, Any] = {
-            "start": valid_start,
-            "limit": valid_limit,
-            "documentType": valid_type,
-        }
-        params.update(kwargs)
-        return self.client.query('get', endpoint, params=params)
+        valid_type = validate_choice("document_type", document_type, DOCUMENT_TYPES)
+        params = build_list_params(
+            start,
+            limit,
+            {"documentType": valid_type, **kwargs},
+            order_fields=frozenset(),
+            enums={},
+            date_keys=(),
+        )
+        return self.client.query('get', self._collection_url(), params=params)
 
     def iter_all(self, max_items: Optional[int] = None, page_size: int = 30, *,
                  document_type: str, **filters: Any) -> Iterator[Any]:
@@ -92,7 +79,15 @@ class NumberTemplates(Actions):
             ValueError: If ``document_type``, ``page_size``, ``max_items``, or filters
                 are invalid; no request is sent.
         """
-        valid_type = _validate_document_type(document_type)
+        valid_type = validate_choice("document_type", document_type, DOCUMENT_TYPES)
+        build_list_params(
+            0,
+            page_size,
+            filters,
+            order_fields=frozenset(),
+            enums={},
+            date_keys=(),
+        )
         return super().iter_all(
             max_items=max_items,
             page_size=page_size,

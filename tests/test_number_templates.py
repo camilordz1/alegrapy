@@ -138,6 +138,16 @@ class TestNumberTemplates(unittest.TestCase):
         ):
             self.assertIsNone(self.client.number_templates.default("invoice"))
 
+        with patch.object(self.client.session, "request") as mock_req:
+            for call_fn in (
+                lambda: self.client.number_templates.list(document_type="invoice", order_field="id"),
+                lambda: self.client.number_templates.list(document_type="invoice", order_direction="ASC"),
+                lambda: self.client.number_templates.iter_all(document_type="invoice", order_field="id"),
+            ):
+                with self.assertRaises(ValueError):
+                    call_fn()
+            mock_req.assert_not_called()
+
     def test_read_update_delete_and_id_validation(self):
         delete_body = {
             "code": 200,
