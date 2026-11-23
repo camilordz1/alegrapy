@@ -182,6 +182,44 @@ class TestInventoryAdjustments(unittest.TestCase):
                     call_fn()
             mock_req.assert_not_called()
 
+    def test_probe_waits_for_asynchronous_stock_updates(self):
+        # Live 2026-11-23: Alegra updates stock a few seconds after an adjustment
+        script_path = (
+            pathlib.Path(__file__).resolve().parents[1] / "scripts" / "probe_inventory_adjustment.py"
+        )
+        spec = importlib.util.spec_from_file_location("probe_inventory_adjustment", script_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        def item(qty):
+            return {"inventory": {"availableQuantity": qty,
+                                  "warehouses": [{"id": "1", "availableQuantity": str(qty)}]}}
+
+        client = MagicMock()
+        client.items.read.side_effect = [item(10), item(10), item(11)]
+        clock = iter([0.0, 1.0, 2.0, 3.0, 4.0])
+        with patch.object(module.time, "monotonic", side_effect=lambda: next(clock)), \
+                patch.object(module.time, "sleep") as sleep:
+            self.assertEqual(module.wait_for_stock(client, "3565", "1", expected=11.0,
+                                                   timeout=30.0, interval=1.0), 11.0)
+        self.assertEqual(client.items.read.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+        # Never reaches the expected value: returns the last observed value at the deadline
+        client = MagicMock()
+        client.items.read.return_value = item(10)
+        clock = iter([0.0, 1.0, 2.0, 3.0, 31.0, 32.0])
+        with patch.object(module.time, "monotonic", side_effect=lambda: next(clock)), \
+                patch.object(module.time, "sleep"):
+            self.assertEqual(module.wait_for_stock(client, "3565", "1", expected=11.0,
+                                                   timeout=30.0, interval=1.0), 10.0)
+
+        parser = module._build_parser()
+        base = ["--yes-call-live-api", "--delete", "--item-id", "1"]
+        self.assertEqual(parser.parse_args(base).settle_timeout, 30.0)
+        with self.assertRaises(SystemExit):
+            parser.parse_args(base + ["--settle-timeout", "-1"])
+
     def test_probe_stock_helpers_refuse_unknown_warehouse_and_report_real_delta(self):
         script_path = (
             pathlib.Path(__file__).resolve().parents[1] / "scripts" / "probe_inventory_adjustment.py"
