@@ -311,6 +311,14 @@ class AlegraClient:
             self._terms = Terms(self)
         return self._terms
 
+    @property
+    def inventory_adjustments(self) -> 'InventoryAdjustments':
+        """Access InventoryAdjustments resource operations."""
+        if not hasattr(self, '_inventory_adjustments'):
+            from alegrapy.inventory_adjustments import InventoryAdjustments
+            self._inventory_adjustments = InventoryAdjustments(self)
+        return self._inventory_adjustments
+
     def _credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """Resolve the (user, token) pair used to authenticate requests.
 
