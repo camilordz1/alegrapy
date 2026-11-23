@@ -182,6 +182,41 @@ class TestInventoryAdjustments(unittest.TestCase):
                     call_fn()
             mock_req.assert_not_called()
 
+    def test_probe_stock_helpers_refuse_unknown_warehouse_and_report_real_delta(self):
+        script_path = (
+            pathlib.Path(__file__).resolve().parents[1] / "scripts" / "probe_inventory_adjustment.py"
+        )
+        spec = importlib.util.spec_from_file_location("probe_inventory_adjustment", script_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        item = {"inventory": {"availableQuantity": 10,
+                              "warehouses": [{"id": "1", "availableQuantity": "7"}]}}
+        self.assertEqual(module._extract_stock(item, None), 10.0)
+        self.assertEqual(module._extract_stock(item, "1"), 7.0)
+        # An unknown warehouse must not silently fall back to the item total
+        with self.assertRaises(ValueError):
+            module._extract_stock(item, "99")
+
+        # The compensating suggestion uses the measured difference, not --quantity
+        self.assertEqual(module.compensation_hint(initial=10.0, current=12.0),
+                         ("out", 2.0))
+        self.assertEqual(module.compensation_hint(initial=10.0, current=9.0),
+                         ("in", 1.0))
+        self.assertIsNone(module.compensation_hint(initial=10.0, current=10.0))
+
+        # The unknown warehouse is detected before anything is created
+        fake_client = MagicMock()
+        fake_client.__enter__.return_value = fake_client
+        fake_client.items.read.return_value = {"inventory": {"availableQuantity": 1, "unitCost": 5,
+                                                             "warehouses": []}}
+        with patch.dict("os.environ", {"ALEGRA_USER": "u", "ALEGRA_TOKEN": "t"}), \
+                patch.object(module, "AlegraClient", return_value=fake_client):
+            code = module.main(["--yes-call-live-api", "--delete", "--item-id", "3565",
+                                "--warehouse-id", "99"])
+        self.assertEqual(code, 2)
+        fake_client.inventory_adjustments.create_once.assert_not_called()
+
     def test_probe_script_guards_payload_and_cleanup(self):
         script_path = (
             pathlib.Path(__file__).resolve().parents[1] / "scripts" / "probe_inventory_adjustment.py"

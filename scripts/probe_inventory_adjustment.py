@@ -7,7 +7,7 @@ import datetime as dt
 import os
 import sys
 import uuid
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from alegrapy import AlegraClient, AlegraNotFoundError
 
@@ -29,7 +29,19 @@ def _extract_stock(item: Dict[str, Any], warehouse_id: Optional[str]) -> float:
         for wh in inv.get("warehouses") or []:
             if isinstance(wh, dict) and str(wh.get("id")) == str(warehouse_id):
                 return float(wh["availableQuantity"])
+        # Never fall back to the item total: the comparison would use the wrong number
+        raise ValueError(f"Warehouse {warehouse_id} not found in the item's inventory")
     return float(inv["availableQuantity"])
+
+
+def compensation_hint(*, initial: float, current: float) -> Optional[Tuple[str, float]]:
+    """Return the ``(type, quantity)`` adjustment that restores ``initial``, or ``None``."""
+    delta = current - initial
+    if delta > 0:
+        return ("out", delta)
+    if delta < 0:
+        return ("in", -delta)
+    return None
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -64,7 +76,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if not isinstance(inv, dict):
             print(f"Item {args.item_id} has no 'inventory' object.", file=sys.stderr)
             return 2
-        initial_stock = _extract_stock(item, args.warehouse_id)
+        try:
+            initial_stock = _extract_stock(item, args.warehouse_id)
+        except ValueError as exc:
+            print(f"{exc}; nothing was created.", file=sys.stderr)
+            return 2
         unit_cost = float(inv.get("unitCost", 0))
         payload = build_adjustment_payload(
             item_id=args.item_id, quantity=args.quantity, unit_cost=unit_cost,
@@ -123,10 +139,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     print(f"(e) Stock reverted to {initial_stock}: PASS")
                 else:
                     verdicts["e"] = "FAIL"
+                    hint = compensation_hint(initial=initial_stock, current=reverted_stock)
+                    kind, qty = hint if hint is not None else ("none", 0.0)
                     print(
                         f"WARNING: Stock did NOT revert ({initial_stock} -> {reverted_stock}). "
-                        f"Apply compensating 'out' adjustment for item {args.item_id}, "
-                        f"quantity={args.quantity}, unitCost={unit_cost}.",
+                        f"To restore it, apply a '{kind}' adjustment for item {args.item_id}, "
+                        f"quantity={qty}, unitCost={unit_cost} (the difference may include "
+                        f"concurrent sales: check before applying).",
                         file=sys.stderr,
                     )
     return 0 if all(v == "PASS" for v in verdicts.values()) else 1
