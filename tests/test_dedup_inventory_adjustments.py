@@ -160,6 +160,10 @@ class TestDedupInventoryAdjustments(unittest.TestCase):
                         )
         self.assertEqual(ctx.exception.resource, "inventory-adjustments")
         self.assertEqual(ctx.exception.attempts, 1)
+        # Adjustments have no client: the warehouse must not be reported as one
+        self.assertIsNone(ctx.exception.client_id)
+        self.assertIsNone(ctx.exception.to_dict()["client_id"])
+        self.assertEqual(ctx.exception.payload["warehouse"], {"id": 3})
 
         # 4xx non-ambiguous -> raised unchanged
         with patch.object(

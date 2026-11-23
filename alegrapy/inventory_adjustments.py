@@ -260,7 +260,8 @@ class InventoryAdjustments(Actions):
             ),
             payload=payload,
             dedup_key=key,
-            client_id=wh_id,
+            # Adjustments have no client; the warehouse stays in the error's payload
+            client_id=None,
             resource=self.endpoint,
             on_unverified=on_unverified,
             verify_window=verify_window,
