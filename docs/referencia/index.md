@@ -30,5 +30,6 @@ Esta sección se genera automáticamente a partir de los docstrings del código 
 | [Listas de precios](price_lists.md) | `PriceLists` |
 | [Categorías de ítems](item_categories.md) | `ItemCategories` |
 | [Términos de pago](terms.md) | `Terms` |
+| [Ajustes de inventario](inventory_adjustments.md) | `InventoryAdjustments`, `InventoryAdjustmentNumerations` |
 
 Para los campos de cada recurso consulta la [documentación oficial de Alegra](https://developer.alegra.com/).

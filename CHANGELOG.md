@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `client.inventory_adjustments` (`InventoryAdjustments`) with validated `create`/`update`, `list`, `iter_all`, `reconcile`, `create_once`, and `numerations` (`InventoryAdjustmentNumerations`).
+- Maintainer probe `scripts/probe_inventory_adjustment.py` (not shipped in wheel/sdist).
+
 ## [0.8.0] - 2026-11-23
 
 Compared against `0.7.0`.

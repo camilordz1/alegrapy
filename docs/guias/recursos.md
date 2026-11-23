@@ -27,6 +27,7 @@ Cada recurso es una propiedad de `AlegraClient`. Todos incluyen las operaciones 
 | Listas de precios | `client.price_lists` | `price-lists` | CRUD estándar |
 | Categorías de ítems | `client.item_categories` | `item-categories` | `delete_attachment(attachment_id)` |
 | Términos de pago | `client.terms` | `terms` | `list(fields=None)` (sin paginación) |
+| Ajustes de inventario | `client.inventory_adjustments` | `inventory-adjustments` | `create_once`, `reconcile`, `numerations` |
 
 Para los campos, filtros y reglas de cada recurso, consulta la [documentación oficial de la API de Alegra](https://developer.alegra.com/).
 

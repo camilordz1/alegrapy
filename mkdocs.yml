@@ -63,6 +63,7 @@ nav:
       - Emisión electrónica (DIAN): guias/emision-dian.md
       - Webhooks: guias/webhooks.md
       - Catálogos y remisiones: guias/catalogos.md
+      - Ajustes de inventario: guias/inventario.md
       - Numeraciones y empresa: guias/numeraciones-y-empresa.md
       - Archivos de facturas: guias/archivos-de-facturas.md
       - Errores: guias/errores.md
@@ -99,3 +100,4 @@ nav:
       - Listas de precios: referencia/price_lists.md
       - Categorías de ítems: referencia/item_categories.md
       - Términos de pago: referencia/terms.md
+      - Ajustes de inventario: referencia/inventory_adjustments.md
