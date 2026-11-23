@@ -146,6 +146,16 @@ class TestIncomeDebitNotes(unittest.TestCase):
             ],
         )
 
+        with patch.object(self.client.session, "request") as mock_req:
+            for call_fn in (
+                lambda: self.client.income_debit_notes.list(order_field="id"),
+                lambda: self.client.income_debit_notes.list(order_direction="ASC"),
+                lambda: self.client.income_debit_notes.iter_all(order_field="id"),
+            ):
+                with self.assertRaises(ValueError):
+                    call_fn()
+            mock_req.assert_not_called()
+
     def test_probe_script_guard_and_payload_builder(self):
         import importlib.util
 
@@ -173,6 +183,49 @@ class TestIncomeDebitNotes(unittest.TestCase):
         self.assertEqual(payload["status"], "draft")
         self.assertEqual(payload["observations"], "alegrapy:dedup:probe-abc")
         self.assertNotIn("stamp", payload)
+
+    def test_probe_script_count_verdicts_and_cleanup_on_failure(self):
+        import importlib.util
+        import os
+
+        script_path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "probe_debit_note_marker.py"
+        spec = importlib.util.spec_from_file_location("probe_debit_note_marker", script_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        parser = module._build_parser()
+        parsed = parser.parse_args(["--yes-call-live-api", "--client-id", "1", "--item-id", "2", "--invoice-id", "3"])
+        self.assertEqual(parsed.count, 2)
+
+        for bad_count in ("0", "6"):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["--yes-call-live-api", "--client-id", "1", "--item-id", "2", "--invoice-id", "3", "--count", bad_count])
+
+        self.assertEqual(module.pagination_verdict([{"id": 1}], [{"id": 2}]), "PASS")
+        self.assertEqual(module.pagination_verdict([{"id": 1}], []), "INCONCLUSIVE")
+        self.assertEqual(module.pagination_verdict([], []), "INCONCLUSIVE")
+        self.assertEqual(module.pagination_verdict([{"id": 1}], [{"id": 1}]), "FAIL")
+        self.assertEqual(module.pagination_verdict([{"id": 1}, {"id": 2}], [{"id": 3}]), "FAIL")
+
+        fake_client = MagicMock()
+        fake_client.__enter__.return_value = fake_client
+        fake_client.income_debit_notes.create.side_effect = [{"id": 101}, {"id": 102}]
+        fake_client.income_debit_notes.read.side_effect = RuntimeError("boom midway")
+        with patch.dict(os.environ, {"ALEGRA_USER": "u", "ALEGRA_TOKEN": "t"}):
+            with patch.object(module, "AlegraClient", return_value=fake_client):
+                with self.assertRaises(RuntimeError):
+                    module.main([
+                        "--yes-call-live-api",
+                        "--client-id", "1",
+                        "--item-id", "2",
+                        "--invoice-id", "3",
+                        "--count", "2",
+                        "--delete",
+                    ])
+        self.assertEqual(
+            [c.args[0] for c in fake_client.income_debit_notes.delete.call_args_list],
+            [101, 102],
+        )
 
 
 if __name__ == "__main__":
