@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import os
 import sys
+import time
 import uuid
 from typing import Any, Dict, Optional, Sequence, Tuple
 
@@ -34,6 +35,31 @@ def _extract_stock(item: Dict[str, Any], warehouse_id: Optional[str]) -> float:
     return float(inv["availableQuantity"])
 
 
+def wait_for_stock(client: Any, item_id: str, warehouse_id: Optional[str], *,
+                   expected: float, timeout: float, interval: float = 2.0) -> float:
+    """Poll the item's stock until it equals ``expected`` or ``timeout`` elapses.
+
+    Alegra updates stock asynchronously (observed 2026-11-23: a few seconds after an
+    adjustment is created or deleted), so a single read right after a change is not
+    reliable. Returns the last observed value.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        value = _extract_stock(client.items.read(item_id), warehouse_id)
+        if value == expected:
+            return value
+        if time.monotonic() >= deadline:
+            return value
+        time.sleep(interval)
+
+
+def _non_negative_float(text: str) -> float:
+    value = float(text)
+    if value < 0 or value != value:
+        raise argparse.ArgumentTypeError("must be a non-negative number")
+    return value
+
+
 def compensation_hint(*, initial: float, current: float) -> Optional[Tuple[str, float]]:
     """Return the ``(type, quantity)`` adjustment that restores ``initial``, or ``None``."""
     delta = current - initial
@@ -51,6 +77,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--item-id", required=True)
     parser.add_argument("--warehouse-id", default=None)
     parser.add_argument("--quantity", type=float, default=1.0)
+    parser.add_argument("--settle-timeout", type=_non_negative_float, default=30.0,
+                        help="Seconds to wait for Alegra to reflect each stock change (default 30).")
     parser.add_argument("--delete", action="store_true",
                         help="Required safety flag: delete the probe adjustment afterwards.")
     return parser
@@ -117,8 +145,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verdicts["c"] = "PASS" if posts == 0 and second.get("id") == adj_id else "FAIL"
             print(f"(c) Second create_once idempotent (posts={posts}): {verdicts['c']}")
 
-            after_item = client.items.read(args.item_id)
-            after_stock = _extract_stock(after_item, args.warehouse_id)
+            after_stock = wait_for_stock(
+                client, args.item_id, args.warehouse_id,
+                expected=initial_stock + args.quantity, timeout=args.settle_timeout,
+            )
             verdicts["d"] = "PASS" if after_stock == initial_stock + args.quantity else "FAIL"
             print(f"(d) Stock rose by {args.quantity} ({initial_stock} -> {after_stock}): {verdicts['d']}")
         finally:
@@ -132,8 +162,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         print(f"Delete check: id={adj_id} deleted (404 confirmed)")
                 except Exception as exc:
                     print(f"Cleanup error deleting {adj_id}: {type(exc).__name__}", file=sys.stderr)
-                reverted_item = client.items.read(args.item_id)
-                reverted_stock = _extract_stock(reverted_item, args.warehouse_id)
+                reverted_stock = wait_for_stock(
+                    client, args.item_id, args.warehouse_id,
+                    expected=initial_stock, timeout=args.settle_timeout,
+                )
                 if reverted_stock == initial_stock:
                     verdicts["e"] = "PASS"
                     print(f"(e) Stock reverted to {initial_stock}: PASS")
