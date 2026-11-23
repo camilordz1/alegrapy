@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `add_attachment()` (every resource that inherits it: invoices, items, contacts, bills, remissions, item categories, ...) now sends the file part with its MIME type, guessed from the file name (`application/octet-stream` when unknown). Without it Alegra answered HTTP 400 "El archivo adjunto es un campo obligatorio".
+
 ## [0.9.0] - 2026-11-23
 
 Compared against `0.8.0`. No breaking changes.

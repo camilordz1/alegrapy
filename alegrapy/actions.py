@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import numbers
 import re
 from typing import Any, Dict, Iterator, List, Optional, Union
@@ -7,6 +8,10 @@ from alegrapy._deprecation import warn_legacy
 from alegrapy.exceptions import AlegraAPIError
 
 _ID_PATTERN = re.compile(r'[A-Za-z0-9_-]+')
+
+# Built at import: mimetypes otherwise loads its tables lazily on the first upload, reading
+# system files with whatever ``open`` is in effect at that moment
+_MIME_TYPES = mimetypes.MimeTypes()
 
 logger = logging.getLogger("alegra")
 
@@ -270,6 +275,10 @@ class Actions:
     def _upload_file(self, endpoint: str, file_path: str, field_name: str = 'file') -> Any:
         """Upload a file using multipart/form-data.
 
+        The file part carries its MIME type, guessed from the file name
+        (``application/octet-stream`` when unknown): Alegra rejects a part without one
+        (HTTP 400 "El archivo adjunto es un campo obligatorio").
+
         Args:
             endpoint (str): Complete API endpoint URL.
             file_path (str): Path to the local file.
@@ -284,8 +293,9 @@ class Actions:
         import os
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
+        content_type = _MIME_TYPES.guess_type(file_path)[0] or 'application/octet-stream'
         with open(file_path, 'rb') as f:
-            files = {field_name: (os.path.basename(file_path), f.read())}
+            files = {field_name: (os.path.basename(file_path), f.read(), content_type)}
             return self.client.query('post', endpoint, files=files)
 
     def add_attachment(self, id: Union[int, str], file_path: str, field_name: str = 'file') -> Any:
