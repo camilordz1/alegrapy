@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `IncomeDebitNotes.create_once()` and `IncomeDebitNotes.reconcile()` for duplicate-safe customer debit note creation scoped by `date`.
-- `AlegraLookupIncompleteError` (subclass of `AlegraAPIError`) raised when a day-scoped lookup hits `max_pages` without exhausting the day.
+- `AlegraLookupIncompleteError` (subclass of `AlegraAPIError`) raised when a day-scoped lookup finds no match and hits `max_pages` without exhausting the day (a match is returned even if the scan stopped early).
 
 ### Changed
 

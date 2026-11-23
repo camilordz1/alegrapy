@@ -119,6 +119,19 @@ class TestDedupDebitNotes(unittest.TestCase):
         self.assertEqual(ctx.exception.date, "2026-11-22")
         self.assertEqual(ctx.exception.pages_scanned, 2)
 
+    def test_reconcile_returns_a_match_even_when_the_scan_is_truncated(self):
+        # Finding the marker already proves the note exists: never fail on a found note
+        full_page = [{"id": i, "observations": None} for i in range(29)]
+        full_page.append({"id": 29, "observations": MARKER, "client": {"id": 126}})
+        with patch.object(
+            self.client.session, "request", return_value=_mock_response(full_page)
+        ) as mock_req:
+            found = self.client.income_debit_notes.reconcile(
+                "dn-1", date="2026-11-22", client_id=126, max_pages=1
+            )
+        self.assertEqual(found["id"], 29)
+        self.assertEqual(mock_req.call_count, 1)
+
     def test_reconcile_validation_errors_send_no_request(self):
         with patch.object(self.client.session, "request") as mock_req:
             for call_fn in (

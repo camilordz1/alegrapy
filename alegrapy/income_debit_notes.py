@@ -91,12 +91,14 @@ class IncomeDebitNotes(Actions):
         not support ``order_field`` or ``client_id``, so this scans pages of 30 records
         filtered by ``date`` until a short page ends the day. When ``client_id`` is
         given, records without a matching ``client.id`` are skipped. If several notes
-        match, the one with the highest ``id`` is returned.
+        match, the one with the highest ``id`` among the scanned pages is returned. A
+        match is returned even when ``max_pages`` stopped the scan early: finding the
+        marker already proves the note exists.
 
         Raises:
             ValueError: If ``dedup_key``, ``date``, ``client_id``, or ``max_pages`` are invalid.
-            AlegraLookupIncompleteError: If ``max_pages`` full pages were scanned without
-                reaching the end of the day.
+            AlegraLookupIncompleteError: If no match was found and ``max_pages`` full pages
+                were scanned without reaching the end of the day (absence is unproven).
         """
         key = validate_dedup_key(dedup_key)
         lookup_date = validate_lookup_date(date)
@@ -123,6 +125,8 @@ class IncomeDebitNotes(Actions):
                 return best_match
             start += len(page)
 
+        if best_match is not None:
+            return best_match
         raise AlegraLookupIncompleteError(
             f"Debit-note lookup for {key!r} on {lookup_date} stopped after {pages} full pages",
             resource=self.endpoint,
