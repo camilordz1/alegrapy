@@ -48,6 +48,8 @@ except AlegraUnverifiedCreateError as err:
 
 La búsqueda (`reconcile`) filtra por `date` en orden descendente de `id` (los más recientes primero) y revalida `warehouse` del lado del cliente. Si `max_pages` páginas completas se agotan sin coincidencia, lanza `AlegraLookupIncompleteError`.
 
+Para distinguir un ajuste nuevo de uno que ya existía, pasa `with_outcome=True` y decide «sin cambios» a partir de `outcome` (`CreateOnceOutcome.EXISTING`), no leyendo el stock justo después del ajuste (Alegra actualiza el stock de forma asíncrona, así que una lectura inmediata puede seguir mostrando el valor anterior). Consulta [Saber si se creó o ya existía](facturas-sin-duplicados.md#saber-si-se-creo-o-ya-existia).
+
 ## Consultar existencias y límites no documentados
 
 El inventario actual de un ítem inventariable se lee desde `client.items.read(id)["inventory"]` (`availableQuantity`, `unitCost`, `warehouses`).
