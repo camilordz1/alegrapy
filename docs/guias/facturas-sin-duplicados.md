@@ -35,6 +35,49 @@ Tres resultados posibles:
 | Devuelve una factura recién creada | El POST funcionó (a la primera o en el reintento verificado). |
 | Lanza `AlegraUnverifiedCreateError` | No se pudo confirmar; **no vuelvas a crear a ciegas**. |
 
+## Saber si se creó o ya existía
+
+Por defecto `create_once` devuelve solo el registro. Si tu aplicación necesita distinguir una
+creación nueva de un registro que ya existía (por ejemplo, para registrar «creada» frente a
+«sin cambios»), pasa `with_outcome=True`:
+
+```python
+from alegrapy import AlegraClient, CreateOnceOutcome
+
+client = AlegraClient(user="tu_usuario@dominio.com", token="tu_token_api")
+
+factura, resultado = client.invoices.create_once(
+    datos,
+    dedup_key=f"order-{order.id}",
+    with_outcome=True,
+)
+
+if resultado == CreateOnceOutcome.EXISTING:
+    registrar("sin cambios", factura["id"])
+elif resultado == CreateOnceOutcome.CREATED:
+    registrar("creada", factura["id"])
+else:
+    # CreateOnceOutcome.RECOVERED: el registro existe, pero tras un POST ambiguo
+    registrar("confirmada tras reintento", factura["id"])
+```
+
+`with_outcome=True` devuelve un `CreateOnceResult(record, outcome)` desempaquetable, donde
+`outcome` es un `CreateOnceOutcome` (compatible con `str`, de modo que `resultado == "existing"`
+funciona igual). Está disponible en los cuatro `create_once` del SDK (`invoices`, `payments`,
+`income_debit_notes` e `inventory_adjustments`).
+
+| Valor (`CreateOnceOutcome`) | Qué ocurrió | Qué reportar habitualmente |
+|---|---|---|
+| `CREATED` (`"created"`) | Un `POST` hecho por esta llamada respondió con éxito. Con `on_unverified="retry"` tras un primer `POST` sin verificar, el primer intento también pudo haber creado un documento. | Creada / aplicada. |
+| `EXISTING` (`"existing"`) | Se encontró el documento antes de enviar ningún `POST` en esta llamada (precheck). | Sin cambios (ya existía). |
+| `RECOVERED` (`"recovered"`) | Se encontró el documento durante la verificación posterior a un fallo ambiguo de `POST`. | Confirmada; **no asumas que fue nueva ni previa**. |
+
+!!! note "Matiz sobre `recovered`"
+    Cuando `outcome` es `CreateOnceOutcome.RECOVERED`, el SDK confirma que el documento existe en
+    Alegra, pero no puede distinguir si lo creó el `POST` ambiguo de esta llamada o una llamada
+    anterior que aún no aparecía en el listado. Si ocurre una excepción (`AlegraAPIError`,
+    `AlegraUnverifiedCreateError`, etc.), se lanza igual en ambos modos sin devolver `outcome`.
+
 ## Elegir `on_unverified`
 
 - `"retry"` (por defecto): reduce los duplicados sin intervención, pero **no los elimina**. Si

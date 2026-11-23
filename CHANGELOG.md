@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `with_outcome: bool = False` keyword argument on `Invoices.create_once()`, `Payments.create_once()`, `IncomeDebitNotes.create_once()`, and `InventoryAdjustments.create_once()`. When `True`, returns a `CreateOnceResult(record, outcome)` named tuple where `outcome` is a `CreateOnceOutcome` (`"created"`, `"existing"`, or `"recovered"`), allowing callers to tell a newly created document apart from one that already existed.
+- Exported `CreateOnceOutcome` and `CreateOnceResult` from `alegrapy`.
+
 ## [0.9.1] - 2026-11-23
 
 Compared against `0.9.0`.
