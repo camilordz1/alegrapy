@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- `NumberTemplates.list`/`iter_all` and `IncomeDebitNotes.list`/`iter_all` now reject `order_field` and `order_direction` with `ValueError` (neither endpoint documents ordering), matching `DebitNotes` and `Terms`.
+
 ## [0.7.0] - 2026-11-22
 
 Compared against `0.6.0`. No breaking changes.
