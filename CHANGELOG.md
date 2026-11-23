@@ -9,18 +9,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **While on `0.y.z`**: a `MINOR` bump (`0.1` -> `0.2`) **may** include breaking changes (always listed under **Breaking changes**); a `PATCH` bump (`0.1.0` -> `0.1.1`) contains fixes only.
 - **From `1.0.0` onward**: breaking changes appear only in `MAJOR` releases; deprecations are announced at least one `MINOR` release before removal with a warning.
 - **Planned for `1.0.0`**: remove the `alegra` compatibility shim and the legacy global `session`, and rename the `"alegra"` logger.
-- **Pinning recommendation**: pin `AlegraPy>=0.7,<0.8` until `1.0.0`.
+- **Pinning recommendation**: pin `AlegraPy>=0.8,<0.9` until `1.0.0`.
 
 ## [Unreleased]
+
+## [0.8.0] - 2026-11-23
+
+Compared against `0.7.0`.
+
+### Breaking changes
+
+- **Ordering is rejected on number templates and customer debit notes**: `NumberTemplates.list`/`iter_all` and `IncomeDebitNotes.list`/`iter_all` now raise `ValueError` (with no request) when given `order_field` or `order_direction`; before, they were forwarded unvalidated. Neither endpoint documents ordering. This matches `DebitNotes` and `Terms`. Remove those arguments to migrate.
 
 ### Added
 
 - `IncomeDebitNotes.create_once()` and `IncomeDebitNotes.reconcile()` for duplicate-safe customer debit note creation scoped by `date`.
 - `AlegraLookupIncompleteError` (subclass of `AlegraAPIError`) raised when a day-scoped lookup finds no match and hits `max_pages` without exhausting the day (a match is returned even if the scan stopped early).
-
-### Changed
-
-- `NumberTemplates.list`/`iter_all` and `IncomeDebitNotes.list`/`iter_all` now reject `order_field` and `order_direction` with `ValueError` (neither endpoint documents ordering), matching `DebitNotes` and `Terms`.
 
 ## [0.7.0] - 2026-11-22
 
