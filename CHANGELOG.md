@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `IncomeDebitNotes.create_once()` and `IncomeDebitNotes.reconcile()` for duplicate-safe customer debit note creation scoped by `date`.
+- `AlegraLookupIncompleteError` (subclass of `AlegraAPIError`) raised when a day-scoped lookup hits `max_pages` without exhausting the day.
+
 ### Changed
 
 - `NumberTemplates.list`/`iter_all` and `IncomeDebitNotes.list`/`iter_all` now reject `order_field` and `order_direction` with `ValueError` (neither endpoint documents ordering), matching `DebitNotes` and `Terms`.

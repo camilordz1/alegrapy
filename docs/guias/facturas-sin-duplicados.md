@@ -225,6 +225,8 @@ variar con la carga de Alegra, así que el `verify_window` de 30 segundos por de
 
 ## Pagos sin duplicados
 
+Para notas débito de cliente sin duplicados, consulta [Notas débito sin duplicados](notas-debito.md#notas-debito-sin-duplicados).
+
 Registrar un pago (`client.payments`) dos veces es igual de riesgoso que duplicar una factura:
 duplica el ingreso o el egreso de caja. `client.payments.create_once` y `client.payments.reconcile`
 usan el mismo flujo y la misma marca en `observations` (campo que Alegra **no imprime** en el
