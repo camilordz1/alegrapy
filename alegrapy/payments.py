@@ -2,8 +2,9 @@ from typing import Any, Dict, Optional, Union
 
 from alegrapy._create_once import (client_id_from, contains_marker, marker_for,
                                  payload_with_marker, record_client_id,
-                                 run_create_once, validate_dedup_key,
-                                 validate_lookup_pages, validate_verify_window)
+                                 run_create_once_with_outcome, validate_dedup_key,
+                                 validate_lookup_pages, validate_verify_window,
+                                 validate_with_outcome)
 from alegrapy.actions import Actions, validate_id
 
 _VALID_PAYMENT_TYPES = ("in", "out")
@@ -88,7 +89,8 @@ class Payments(Actions):
 
     def create_once(self, params: Dict[str, Any], dedup_key: str, *,
                     on_unverified: str = "retry", verify_window: float = 30.0,
-                    lookup_pages: int = 2, precheck: bool = True) -> Any:
+                    lookup_pages: int = 2, precheck: bool = True,
+                    with_outcome: bool = False) -> Any:
         """Create a payment at most once per ``dedup_key``.
 
         A unique marker (``alegrapy:dedup:<key>``) is appended to ``observations``
@@ -130,9 +132,12 @@ class Payments(Actions):
                 failure (default 30).
             lookup_pages (int): Pages of 30 payments scanned on each lookup (default 2).
             precheck (bool): Look for the marker before posting (default True).
+            with_outcome (bool): When True, return a :class:`CreateOnceResult`
+                ``(record, outcome)`` instead of the bare record (default False).
 
         Returns:
-            Any: The created (or previously existing) payment.
+            Any: The created (or previously existing) payment, or a
+            :class:`CreateOnceResult` when ``with_outcome=True``.
 
         Raises:
             ValueError: If the key, client id, ``type``, options or observations
@@ -145,13 +150,14 @@ class Payments(Actions):
             raise ValueError("on_unverified must be 'retry' or 'raise'")
         validate_verify_window(verify_window)
         validate_lookup_pages(lookup_pages)
+        validate_with_outcome(with_outcome)
         if not isinstance(params, dict):
             raise ValueError("params must be a dict")
         payload = payload_with_marker(params, key)
         client_id = client_id_from(params, required=False)
         payment_type = _validate_payment_type(params.get("type"))
 
-        return run_create_once(
+        result = run_create_once_with_outcome(
             post=self.create,
             lookup=lambda: self.reconcile(
                 key, client_id, type=payment_type, lookup_pages=lookup_pages
@@ -166,6 +172,7 @@ class Payments(Actions):
             precheck=precheck,
             log_path=f"/{self.endpoint}",
         )
+        return result if with_outcome else result.record
 
     def void(self, id: Union[int, str]) -> Any:
         """Void / Annul a payment by ID.

@@ -2,6 +2,7 @@ from alegrapy._version import __version__
 
 from alegrapy.session import AlegraClient, AlegraAPIError, session
 from alegrapy.retry import RetryPolicy
+from alegrapy._create_once import CreateOnceOutcome, CreateOnceResult
 from alegrapy.dedup import make_dedup_key, make_dedup_key_from
 from alegrapy.credit_notes import (CreditNotes, credit_notes, CreditNoteType,
                                  CreditNoteOperationType)
@@ -76,6 +77,8 @@ __all__ = [
     'StampStatus',
     'StampResult',
     'RetryPolicy',
+    'CreateOnceOutcome',
+    'CreateOnceResult',
     'make_dedup_key',
     'make_dedup_key_from',
     'CreditNotes',

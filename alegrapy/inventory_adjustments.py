@@ -7,11 +7,12 @@ from alegrapy._create_once import (
     contains_marker,
     marker_for,
     payload_with_marker,
-    run_create_once,
+    run_create_once_with_outcome,
     validate_dedup_key,
     validate_lookup_date,
     validate_lookup_pages,
     validate_verify_window,
+    validate_with_outcome,
 )
 from alegrapy._listing import build_list_params
 from alegrapy.actions import Actions, validate_id
@@ -224,7 +225,8 @@ class InventoryAdjustments(Actions):
 
     def create_once(self, params: Dict[str, Any], dedup_key: str, *,
                     on_unverified: str = "retry", verify_window: float = 30.0,
-                    max_pages: int = 10, precheck: bool = True) -> Any:
+                    max_pages: int = 10, precheck: bool = True,
+                    with_outcome: bool = False) -> Any:
         """Create an inventory adjustment at most once per ``dedup_key``.
 
         Flow:
@@ -237,6 +239,9 @@ class InventoryAdjustments(Actions):
         4. If not found and ``on_unverified="retry"``, POST once more and verify again;
            otherwise raise :class:`AlegraUnverifiedCreateError`.
 
+        When ``with_outcome=True``, returns a :class:`CreateOnceResult`
+        ``(record, outcome)`` instead of the bare record.
+
         Limitations:
             The lookup covers only ``params["date"]``. Because an adjustment moves
             real stock, prefer ``on_unverified="raise"`` and quarantine
@@ -248,12 +253,13 @@ class InventoryAdjustments(Actions):
             raise ValueError("on_unverified must be 'retry' or 'raise'")
         validate_verify_window(verify_window)
         pages = validate_lookup_pages(max_pages)
+        validate_with_outcome(with_outcome)
         validated = _validate_adjustment_payload(params, require_all=True)
         wh_id = _warehouse_id_from(validated.get("warehouse"))
         payload = payload_with_marker(validated, key)
         lookup_date = payload["date"]
 
-        return run_create_once(
+        result = run_create_once_with_outcome(
             post=self.create,
             lookup=lambda: self.reconcile(
                 key, date=lookup_date, warehouse_id=wh_id, max_pages=pages
@@ -269,3 +275,4 @@ class InventoryAdjustments(Actions):
             precheck=precheck,
             log_path=f"/{self.endpoint}",
         )
+        return result if with_outcome else result.record
