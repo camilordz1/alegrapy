@@ -42,6 +42,28 @@ Filtros documentados: `status` (`open`, `closed`, `draft`, `void`), `emission_st
 client.income_debit_notes.void(42)
 ```
 
-## Creación sin duplicados (`create_once`)
+## Notas débito sin duplicados
 
-A diferencia de facturas y pagos, **no existe `create_once` para notas débito** todavía: la documentación REST de `/income-debit-notes` no define el campo `observations` (solo `annotation`, que se imprime en el PDF) ni filtros de `client_id` u ordenamiento en el listado. Mientras no se verifique si el marcador persiste y el listado pagina de forma estable, no es seguro automatizar reintentos de creación.
+`client.income_debit_notes.create_once` y `reconcile` protegen contra duplicados usando la marca `alegrapy:dedup:<clave>` en `observations`:
+
+```python
+from alegrapy import AlegraClient, AlegraLookupIncompleteError, AlegraUnverifiedCreateError, make_dedup_key_from
+
+key = make_dedup_key_from(datos, ["client.id", "invoice.id", "type", "items[].id", "items[].price"])
+
+try:
+    nota = client.income_debit_notes.create_once(
+        datos, dedup_key=key, on_unverified="raise",
+    )
+except AlegraLookupIncompleteError as err:
+    # Más de max_pages * 30 notas ese día antes de publicar: amplía max_pages
+    raise
+except AlegraUnverifiedCreateError as err:
+    guardar_en_cuarentena(err.to_dict())
+```
+
+Ten en cuenta:
+
+- **Búsqueda por día (`date`)**: `GET /income-debit-notes` devuelve los registros en orden ascendente por `id` sin ordenamiento ni filtro `client_id`, así que `reconcile(key, date=..., client_id=...)` recorre las páginas de ese día (hasta `max_pages * 30`). Si se agotan `max_pages` páginas completas sin terminar el día, lanza `AlegraLookupIncompleteError` (en precheck aborta sin hacer `POST`; durante la verificación tras un `POST` ambiguo pasa a `AlegraUnverifiedCreateError` para cuarentena).
+- **Misma fecha en reintentos**: un reintento después de medianoche con otra `date` no encontrará la nota del día anterior.
+- **Reutilización de IDs**: si borras borradores, Alegra puede reutilizar sus `id`; la identidad es la marca en `observations`, nunca el `id`.
