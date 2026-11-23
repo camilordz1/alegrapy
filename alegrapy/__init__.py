@@ -18,6 +18,7 @@ from alegrapy.exceptions import (
     AlegraStampError,
     AlegraStampTimeoutError,
     AlegraAlreadyAnnulledError,
+    AlegraLookupIncompleteError,
     AlegraUnverifiedCreateError,
 )
 from alegrapy.actions import Actions, actions
@@ -65,6 +66,7 @@ __all__ = [
     'AlegraStampError',
     'AlegraStampTimeoutError',
     'AlegraAlreadyAnnulledError',
+    'AlegraLookupIncompleteError',
     'AlegraUnverifiedCreateError',
     'StampState',
     'StampStatus',

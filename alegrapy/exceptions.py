@@ -129,6 +129,18 @@ class AlegraAlreadyAnnulledError(AlegraAPIError):
         self.invoice_id = invoice_id
 
 
+class AlegraLookupIncompleteError(AlegraAPIError):
+    """A dedup lookup stopped at ``max_pages`` without exhausting the target day."""
+
+    def __init__(self, message: str, *, resource: str, dedup_key: str,
+                 date: str, pages_scanned: int) -> None:
+        super().__init__(message)
+        self.resource = resource
+        self.dedup_key = dedup_key
+        self.date = date
+        self.pages_scanned = pages_scanned
+
+
 class AlegraUnverifiedCreateError(AlegraAPIError):
     """A create failed ambiguously and Alegra could not confirm whether it happened.
 
