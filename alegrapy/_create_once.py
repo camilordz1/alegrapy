@@ -5,12 +5,13 @@ Private module: callers use ``Invoices.create_once``, ``Invoices.annul``, or
 """
 import copy
 import datetime
+import enum
 import logging
 import math
 import numbers
 import re
 import time
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, NamedTuple, Optional, Union
 
 from alegrapy.actions import validate_id
 from alegrapy.exceptions import (AlegraAlreadyAnnulledError, AlegraAPIError, AlegraStampError,
@@ -25,6 +26,38 @@ _MARKER_PREFIX = "alegrapy:dedup:"
 _MAX_OBSERVATIONS = 500
 _VERIFY_INITIAL_INTERVAL = 1.0
 _VERIFY_MAX_INTERVAL = 8.0
+
+
+class CreateOnceOutcome(str, enum.Enum):
+    """Outcome reported by ``create_once(..., with_outcome=True)``.
+
+    - ``CREATED``: a ``POST`` made by this call returned successfully. Note that
+      with ``on_unverified="retry"`` after an unverified first ``POST``, the
+      first attempt may also have created a document.
+    - ``EXISTING``: the document was found before any ``POST`` in this call; no
+      ``POST`` was sent.
+    - ``RECOVERED``: the document was found after an ambiguous ``POST`` failure;
+      it may have been created by this call or by an earlier one—the SDK cannot
+      tell which.
+    """
+
+    CREATED = "created"
+    EXISTING = "existing"
+    RECOVERED = "recovered"
+
+
+class CreateOnceResult(NamedTuple):
+    """Result pair returned by ``create_once(..., with_outcome=True)``."""
+
+    record: Any
+    outcome: CreateOnceOutcome
+
+
+def validate_with_outcome(with_outcome: Any) -> bool:
+    """Validate that ``with_outcome`` is a real ``bool``."""
+    if not isinstance(with_outcome, bool):
+        raise ValueError("with_outcome must be a boolean")
+    return with_outcome
 
 
 def validate_dedup_key(dedup_key: Any) -> str:
@@ -144,15 +177,18 @@ def payload_with_marker(params: Dict[str, Any], key: str) -> Dict[str, Any]:
     return payload
 
 
-def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
-                    lookup: Callable[[], Optional[Dict[str, Any]]],
-                    payload: Dict[str, Any], dedup_key: str,
-                    client_id: Any, resource: str,
-                    on_unverified: str = "retry", verify_window: float = 30.0,
-                    lookup_pages: int = 2, precheck: bool = True,
-                    before_post: Optional[Callable[[], Optional[Dict[str, Any]]]] = None,
-                    log_path: str) -> Any:
+def run_create_once_with_outcome(*, post: Callable[[Dict[str, Any]], Any],
+                                 lookup: Callable[[], Optional[Dict[str, Any]]],
+                                 payload: Dict[str, Any], dedup_key: str,
+                                 client_id: Any, resource: str,
+                                 on_unverified: str = "retry", verify_window: float = 30.0,
+                                 lookup_pages: int = 2, precheck: bool = True,
+                                 before_post: Optional[Callable[[], Optional[Dict[str, Any]]]] = None,
+                                 log_path: str) -> CreateOnceResult:
     """POST once (twice at most), verifying ambiguous failures by dedup marker.
+
+    Returns a :class:`CreateOnceResult` pairing the document with the
+    :class:`CreateOnceOutcome` describing which path produced it.
 
     ``before_post`` runs before every POST attempt. If it returns a document, that
     document is returned instead of posting; it may also raise to abort the create.
@@ -160,20 +196,20 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
     if on_unverified not in ("retry", "raise"):
         raise ValueError("on_unverified must be 'retry' or 'raise'")
     window = validate_verify_window(verify_window)
-    pages = validate_lookup_pages(lookup_pages)
+    validate_lookup_pages(lookup_pages)
 
     if precheck:
         existing = lookup()
         if existing is not None:
-            return existing
+            return CreateOnceResult(existing, CreateOnceOutcome.EXISTING)
 
     existing = before_post() if before_post is not None else None
     if existing is not None:
-        return existing
+        return CreateOnceResult(existing, CreateOnceOutcome.EXISTING)
 
     attempts = 1
     try:
-        return post(payload)
+        return CreateOnceResult(post(payload), CreateOnceOutcome.CREATED)
     except AlegraStampError:
         raise
     except AlegraAPIError as error:
@@ -184,7 +220,7 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
     found = _verified_lookup(lookup, window, payload, dedup_key, client_id,
                              resource, attempts, last_error, log_path)
     if found is not None:
-        return found
+        return CreateOnceResult(found, CreateOnceOutcome.RECOVERED)
     if on_unverified == "raise":
         raise _unverified_error(dedup_key, client_id, resource, payload,
                                 attempts, last_error) from last_error
@@ -201,7 +237,7 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
         raise _unverified_error(dedup_key, client_id, resource, payload,
                                 attempts, last_error) from guard_error
     if existing is not None:
-        return existing
+        return CreateOnceResult(existing, CreateOnceOutcome.RECOVERED)
 
     logger.warning(
         f"POST - {log_path} - dedup key {dedup_key!r} unverified; "
@@ -209,7 +245,7 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
     )
     attempts = 2
     try:
-        return post(payload)
+        return CreateOnceResult(post(payload), CreateOnceOutcome.CREATED)
     except AlegraStampError:
         # Definitive "created but not stamped" outcome: never wrap or retry it
         raise
@@ -223,9 +259,34 @@ def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
     found = _verified_lookup(lookup, window, payload, dedup_key, client_id,
                              resource, attempts, last_error, log_path)
     if found is not None:
-        return found
+        return CreateOnceResult(found, CreateOnceOutcome.RECOVERED)
     raise _unverified_error(dedup_key, client_id, resource, payload,
                             attempts, last_error) from last_error
+
+
+def run_create_once(*, post: Callable[[Dict[str, Any]], Any],
+                    lookup: Callable[[], Optional[Dict[str, Any]]],
+                    payload: Dict[str, Any], dedup_key: str,
+                    client_id: Any, resource: str,
+                    on_unverified: str = "retry", verify_window: float = 30.0,
+                    lookup_pages: int = 2, precheck: bool = True,
+                    before_post: Optional[Callable[[], Optional[Dict[str, Any]]]] = None,
+                    log_path: str) -> Any:
+    """POST once (twice at most), returning only the document record."""
+    return run_create_once_with_outcome(
+        post=post,
+        lookup=lookup,
+        payload=payload,
+        dedup_key=dedup_key,
+        client_id=client_id,
+        resource=resource,
+        on_unverified=on_unverified,
+        verify_window=verify_window,
+        lookup_pages=lookup_pages,
+        precheck=precheck,
+        before_post=before_post,
+        log_path=log_path,
+    ).record
 
 
 def _verified_lookup(lookup: Callable[[], Optional[Dict[str, Any]]], verify_window: float,

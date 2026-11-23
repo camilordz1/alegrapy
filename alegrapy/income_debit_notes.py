@@ -7,11 +7,12 @@ from alegrapy._create_once import (
     marker_for,
     payload_with_marker,
     record_client_id,
-    run_create_once,
+    run_create_once_with_outcome,
     validate_dedup_key,
     validate_lookup_date,
     validate_lookup_pages,
     validate_verify_window,
+    validate_with_outcome,
 )
 from alegrapy._listing import build_list_params
 from alegrapy.actions import Actions, validate_id
@@ -137,7 +138,8 @@ class IncomeDebitNotes(Actions):
 
     def create_once(self, params: Dict[str, Any], dedup_key: str, *,
                     on_unverified: str = "retry", verify_window: float = 30.0,
-                    max_pages: int = 10, precheck: bool = True) -> Any:
+                    max_pages: int = 10, precheck: bool = True,
+                    with_outcome: bool = False) -> Any:
         """Create a customer debit note at most once per ``dedup_key``.
 
         Flow:
@@ -151,6 +153,9 @@ class IncomeDebitNotes(Actions):
         4. If not found and ``on_unverified="retry"``, POST once more and verify again;
            otherwise raise :class:`AlegraUnverifiedCreateError`. Never more than 2 POSTs.
 
+        When ``with_outcome=True``, returns a :class:`CreateOnceResult`
+        ``(record, outcome)`` instead of the bare record.
+
         Limitations:
             The lookup only covers ``params["date"]``: a note created on another day
             (for example a retry after midnight with a new date) is not found. Alegra
@@ -163,6 +168,7 @@ class IncomeDebitNotes(Actions):
             raise ValueError("on_unverified must be 'retry' or 'raise'")
         validate_verify_window(verify_window)
         pages = validate_lookup_pages(max_pages)
+        validate_with_outcome(with_outcome)
         if not isinstance(params, dict):
             raise ValueError("params must be a dict")
         lookup_date = validate_lookup_date(params.get("date"))
@@ -172,7 +178,7 @@ class IncomeDebitNotes(Actions):
         payload = payload_with_marker(params, key)
         payload["date"] = lookup_date
 
-        return run_create_once(
+        result = run_create_once_with_outcome(
             post=self.create,
             lookup=lambda: self.reconcile(
                 key, date=lookup_date, client_id=client_id, max_pages=pages
@@ -187,6 +193,7 @@ class IncomeDebitNotes(Actions):
             precheck=precheck,
             log_path=f"/{self.endpoint}",
         )
+        return result if with_outcome else result.record
 
     def void(self, id: Union[int, str]) -> Any:
         """Void a customer debit note by ID (``POST /income-debit-notes/{id}/void``)."""

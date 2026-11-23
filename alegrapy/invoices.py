@@ -17,8 +17,9 @@ import requests
 
 from alegrapy._create_once import (client_id_from, contains_marker, marker_for,
                                  payload_with_marker, run_create_once,
+                                 run_create_once_with_outcome,
                                  validate_dedup_key, validate_lookup_date, validate_lookup_pages,
-                                 validate_verify_window)
+                                 validate_verify_window, validate_with_outcome)
 from alegrapy.actions import Actions, validate_id
 from alegrapy.credit_notes import CreditNoteOperationType, CreditNoteType
 from alegrapy.dedup import make_dedup_key
@@ -228,7 +229,8 @@ class Invoices(Actions):
 
     def create_once(self, params: Dict[str, Any], dedup_key: str, *,
                     on_unverified: str = "retry", verify_window: float = 30.0,
-                    lookup_pages: int = 2, precheck: bool = True) -> Any:
+                    lookup_pages: int = 2, precheck: bool = True,
+                    with_outcome: bool = False) -> Any:
         """Create an invoice at most once per ``dedup_key``.
 
         A unique marker (``alegrapy:dedup:<key>``) is appended to ``observations`` and
@@ -270,9 +272,12 @@ class Invoices(Actions):
                 failure (default 30).
             lookup_pages (int): Pages of 30 invoices scanned on each lookup (default 2).
             precheck (bool): Look for the marker before posting (default True).
+            with_outcome (bool): When True, return a :class:`CreateOnceResult`
+                ``(record, outcome)`` instead of the bare record (default False).
 
         Returns:
-            Any: The created (or previously existing) invoice.
+            Any: The created (or previously existing) invoice, or a
+            :class:`CreateOnceResult` when ``with_outcome=True``.
 
         Raises:
             ValueError: If the key, client id, options or observations length are
@@ -285,6 +290,7 @@ class Invoices(Actions):
             raise ValueError("on_unverified must be 'retry' or 'raise'")
         validate_verify_window(verify_window)
         validate_lookup_pages(lookup_pages)
+        validate_with_outcome(with_outcome)
         if not isinstance(params, dict):
             raise ValueError("params must be a dict")
         lookup_date = validate_lookup_date(params.get("date"))
@@ -293,7 +299,7 @@ class Invoices(Actions):
             payload["date"] = lookup_date
         client_id = self._client_id_from(params)
 
-        return run_create_once(
+        result = run_create_once_with_outcome(
             post=self.create,
             lookup=lambda: self.reconcile(
                 key, client_id, lookup_pages=lookup_pages, date=lookup_date
@@ -308,6 +314,7 @@ class Invoices(Actions):
             precheck=precheck,
             log_path=f"/{self.endpoint}",
         )
+        return result if with_outcome else result.record
 
     @staticmethod
     def _payload_with_marker(params: Dict[str, Any], key: str) -> Dict[str, Any]:
