@@ -64,6 +64,6 @@ except AlegraUnverifiedCreateError as err:
 
 Ten en cuenta:
 
-- **Búsqueda por día (`date`)**: `GET /income-debit-notes` devuelve los registros en orden ascendente por `id` sin ordenamiento ni filtro `client_id`, así que `reconcile(key, date=..., client_id=...)` recorre las páginas de ese día (hasta `max_pages * 30`). Si se agotan `max_pages` páginas completas sin terminar el día, lanza `AlegraLookupIncompleteError` (en precheck aborta sin hacer `POST`; durante la verificación tras un `POST` ambiguo pasa a `AlegraUnverifiedCreateError` para cuarentena).
+- **Búsqueda por día (`date`)**: `GET /income-debit-notes` devuelve los registros en orden ascendente por `id` sin ordenamiento ni filtro `client_id`, así que `reconcile(key, date=..., client_id=...)` recorre las páginas de ese día (hasta `max_pages * 30`). Si encuentra la nota la devuelve, aunque no haya terminado el día. Si no la encuentra y se agotan `max_pages` páginas completas sin terminar el día, lanza `AlegraLookupIncompleteError`, porque no puede asegurar que la nota no exista (en precheck aborta sin hacer `POST`; durante la verificación tras un `POST` ambiguo pasa a `AlegraUnverifiedCreateError` para cuarentena).
 - **Misma fecha en reintentos**: un reintento después de medianoche con otra `date` no encontrará la nota del día anterior.
 - **Reutilización de IDs**: si borras borradores, Alegra puede reutilizar sus `id`; la identidad es la marca en `observations`, nunca el `id`.
