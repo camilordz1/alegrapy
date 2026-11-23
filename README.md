@@ -19,7 +19,7 @@ evita facturas duplicadas por reintentos ciegos.
    pip install AlegraPy
    ```
 
-   Hasta la 1.0 se recomienda fijar la serie: `pip install "AlegraPy>=0.9,<0.10"`.
+   Hasta la 1.0 se recomienda fijar la serie: `pip install "AlegraPy>=0.10,<0.11"`.
 
 2. Obtén tus credenciales en Alegra: **Configuración → API - Integraciones con otros sistemas**
    (correo y token).
