@@ -50,6 +50,10 @@ from alegrapy.warehouses import Warehouses
 from alegrapy.price_lists import PriceLists
 from alegrapy.item_categories import ItemCategories
 from alegrapy.terms import Terms
+from alegrapy.inventory_adjustments import (
+    InventoryAdjustmentNumerations,
+    InventoryAdjustments,
+)
 
 __all__ = [
     '__version__',
@@ -118,5 +122,7 @@ __all__ = [
     'PriceLists',
     'ItemCategories',
     'Terms',
+    'InventoryAdjustments',
+    'InventoryAdjustmentNumerations',
 ]
 
